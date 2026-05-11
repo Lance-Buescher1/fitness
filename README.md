@@ -1,2 +1,2 @@
-# private-fitness
+# fitness
 Personal fitness app
