@@ -38,8 +38,13 @@ export function usePhotoGallery() {
     async (files: FileList | File[]) => {
       const list = Array.from(files);
       if (list.length === 0) return;
-      await addPhotosFromFiles(list);
-      await refresh();
+      try {
+        await addPhotosFromFiles(list);
+        await refresh();
+        setError(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to add photos");
+      }
     },
     [refresh],
   );

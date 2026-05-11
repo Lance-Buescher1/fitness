@@ -45,15 +45,22 @@ Snaps a camera photo and saves it directly to a specific "Gym" folder in the Fil
 
 ## 3. Data & Storage Structure
 
-### CSV Format (`fitness.csv`)
+### CSV Format
 
-**Stored in:**  
-`iCloud Drive/Shortcuts/GymData/fitness.csv`
+**Manual (`fitness.csv`)** — `iCloud Drive/Shortcuts/GymData/fitness.csv`  
+Same folder may include **`health_stats.csv`**: HealthKit append-only rows (`date,calories_burned` plus optional future columns). The app merges on import; calories from HealthKit override manual calories for that date when both exist.
 
 ```csv
 date,calories_burned,weight,workout_completed
-2025-10-01,2450,185.5,true
+2025-10-01,,185.5,true
 2025-10-02,2100,185.2,false
+```
+
+**`health_stats.csv` (example):**
+
+```csv
+date,calories_burned
+2025-10-01,2450
 ```
 
 ### Photo Folder

@@ -25,22 +25,25 @@ Shortcut names default to `SyncCalories` and `TakePhoto`. Override with:
 
 ## iOS Shortcuts (you build in the Shortcuts app)
 
-Paths match the project plan:
+Paths match the project plan (iCloud or **On My iPhone** is fine—see [shortcuts.md](./shortcuts.md)):
 
-- **CSV:** `iCloud Drive/Shortcuts/GymData/fitness.csv`
-- **Photos:** `iCloud Drive/Shortcuts/GymData/Photos/` as `IMG_YYYYMMDD.jpg`
+- **Manual sheet:** `…/GymData/fitness.csv` — weight, workout flag, optional calories
+- **HealthKit dump:** `…/GymData/health_stats.csv` — `date,calories_burned` (extra columns allowed for future stats)
+- **Photos:** `…/GymData/Photos/` as `IMG_YYYYMMDD.jpg`
 
-**CSV columns (header row required):**
+In the PWA, use **Import fitness.csv** and **Import health_stats.csv** separately (each merges into what is already in the browser), or **Replace all (1–2 CSVs)** for a full reload from disk. On desktop Chrome/Edge you can **Connect GymData folder** once so CSV/photo picks open inside that folder (`showOpenFilePicker` with `startIn`). iOS Safari cannot pre-select an iCloud folder; use the separate import buttons and pick each file from Files.
 
-`date,calories_burned,weight,workout_completed`
+**`fitness.csv` header (required):** `date,calories_burned,weight,workout_completed`  
+Example: `2025-10-01,,185.5,true` (empty calories is OK when you import with `health_stats.csv`).
 
-Example row: `2025-10-01,2450,185.5,true`
+**`health_stats.csv` header (minimum):** `date,calories_burned`  
+Example: `2025-10-01,2450` — same-day duplicates use the **maximum** calories value.
 
 ### SyncCalories (example name)
 
-1. Read active energy / relevant HealthKit metrics for “today” (or your chosen window).
-2. Append one line to `fitness.csv` with the columns above (`weight` can be blank if you only log it elsewhere).
-3. Optional: add **Open URLs** at the end pointing at your deployed site so you return to the PWA to tap **Import CSV**.
+1. Read active energy (or your chosen HealthKit metric) for “today” (or your chosen window).
+2. Append one line to **`health_stats.csv`** (not `fitness.csv`) so Shortcuts never overwrite manual weight/workout.
+3. Optional: **Open URLs** to your PWA, then **Import CSV** and select both CSVs (or only `health_stats.csv` if you have no manual rows yet).
 
 ### TakePhoto (example name)
 

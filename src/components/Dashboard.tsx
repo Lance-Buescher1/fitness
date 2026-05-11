@@ -12,7 +12,14 @@ import { usePhotoGallery } from "@/hooks/usePhotoGallery";
 import type { HeatmapMetric } from "@/lib/heatmap/types";
 
 export function Dashboard() {
-  const { rows, error: rowError, setError: setRowError, importCsvText } = useFitnessRows();
+  const {
+    rows,
+    error: rowError,
+    setError: setRowError,
+    importCsvBundle,
+    importFitnessCsvFile,
+    importHealthStatsCsvFile,
+  } = useFitnessRows();
   const {
     photos,
     error: photoError,
@@ -52,7 +59,9 @@ export function Dashboard() {
           setRowError(null);
           setPhotoError(null);
         }}
-        onImportCsv={(text, prev) => importCsvText(text, prev)}
+        onImportCsvBundle={(files, prev) => importCsvBundle(files, prev)}
+        onImportFitnessCsv={(file, prev) => importFitnessCsvFile(file, prev)}
+        onImportHealthStatsCsv={(file, prev) => importHealthStatsCsvFile(file, prev)}
         onAddPhotos={(files) => addFromFiles(files)}
       />
 
