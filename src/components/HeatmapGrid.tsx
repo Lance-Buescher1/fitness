@@ -62,7 +62,17 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
         {cells.map((c) => (
           <div
             key={c.isoDate}
-            title={`${c.isoDate}${c.caloriesBurned != null ? ` · ${c.caloriesBurned} kcal` : ""}`}
+            title={
+              metric === "workout"
+                ? `${c.isoDate}${
+                    c.workoutCompleted == null
+                      ? " · workout not logged"
+                      : c.workoutCompleted
+                        ? " · workout day"
+                        : " · rest day"
+                  }`
+                : `${c.isoDate}${c.caloriesBurned != null ? ` · ${c.caloriesBurned} kcal` : " · calories not logged"}`
+            }
             className="min-h-[10px] rounded-sm ring-1 ring-zinc-800/80"
             style={{ backgroundColor: cellColor(c.intensity, metric, c.caloriesBurned) }}
           />
@@ -79,6 +89,7 @@ function cellColor(intensity: number, metric: HeatmapMetric, calories: number | 
   }
   if (metric === "workout") {
     if (intensity === 1) return "rgba(6, 78, 59, 0.45)";
+    if (intensity === 3) return "rgba(82, 82, 91, 0.65)";
     return "rgba(16, 185, 129, 0.85)";
   }
   const alpha = 0.2 + (intensity / 4) * 0.75;

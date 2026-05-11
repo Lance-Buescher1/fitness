@@ -13,9 +13,10 @@ function lastNDaysSorted(days: FitnessDay[], n: number): FitnessDay[] {
 }
 
 function avgCalories(days: FitnessDay[]): number | null {
-  if (days.length === 0) return null;
-  const sum = days.reduce((a, d) => a + d.caloriesBurned, 0);
-  return sum / days.length;
+  const withCals = days.filter((d) => d.caloriesBurned != null && Number.isFinite(d.caloriesBurned));
+  if (withCals.length === 0) return null;
+  const sum = withCals.reduce((a, d) => a + (d.caloriesBurned as number), 0);
+  return sum / withCals.length;
 }
 
 export const ruleBasedInsightEngine: InsightEngine = {

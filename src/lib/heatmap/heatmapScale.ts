@@ -11,7 +11,9 @@ function bucketCalories(value: number, min: number, max: number): number {
 }
 
 export function caloriesRange(rows: FitnessDay[]): { min: number; max: number } {
-  const vals = rows.map((r) => r.caloriesBurned).filter((n) => Number.isFinite(n));
+  const vals = rows
+    .map((r) => r.caloriesBurned)
+    .filter((n): n is number => n != null && Number.isFinite(n));
   if (vals.length === 0) return { min: 0, max: 0 };
   return { min: Math.min(...vals), max: Math.max(...vals) };
 }
@@ -23,7 +25,9 @@ export function intensityForDay(
 ): number {
   if (!day) return 0;
   if (metric === "workout") {
+    if (day.workoutCompleted == null) return 3;
     return day.workoutCompleted ? 2 : 1;
   }
+  if (day.caloriesBurned == null) return 0;
   return bucketCalories(day.caloriesBurned, calRange.min, calRange.max);
 }

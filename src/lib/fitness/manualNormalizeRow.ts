@@ -1,5 +1,5 @@
 import type { ManualFitnessDay } from "@/lib/fitness/types";
-import { parseBooleanLoose } from "@/lib/fitness/parseBoolean";
+import { parseWorkoutCompletedField } from "@/lib/fitness/parseBoolean";
 import type { RawFitnessRow } from "@/lib/fitness/normalizeRow";
 
 export function normalizeManualFitnessRow(
@@ -39,7 +39,7 @@ export function normalizeManualFitnessRow(
       date,
       caloriesBurned,
       weight,
-      workoutCompleted: parseBooleanLoose(raw.workout_completed),
+      workoutCompleted: parseWorkoutCompletedField(raw.workout_completed),
     },
   };
 }

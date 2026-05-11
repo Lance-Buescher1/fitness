@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PhotoRecord } from "@/lib/db/types";
 import { parsePhotoIsoDateFromFileName } from "@/lib/dates/parsePhotoFileName";
 
@@ -15,6 +15,8 @@ function objectUrlKey(p: PhotoRecord): string {
 
 export function PhotoTimeline({ photos, onClear }: Props) {
   const [urls, setUrls] = useState<Map<string, string>>(new Map());
+  const [dataUrlFallback, setDataUrlFallback] = useState<Map<string, string>>(new Map());
+  const dataUrlAttempted = useRef(new Set<string>());
 
   const sorted = useMemo(
     () => [...photos].sort((a, b) => a.fileName.localeCompare(b.fileName)),
@@ -26,17 +28,26 @@ export function PhotoTimeline({ photos, onClear }: Props) {
     [sorted],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    dataUrlAttempted.current.clear();
+    setDataUrlFallback(new Map());
     const next = new Map<string, string>();
     for (const p of sorted) {
       next.set(objectUrlKey(p), URL.createObjectURL(p.blob));
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- object URLs must follow photo list updates
     setUrls(next);
     return () => {
       for (const u of next.values()) URL.revokeObjectURL(u);
     };
   }, [photoBlobFingerprint, sorted]);
+
+  const blobToDataUrl = (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+      reader.readAsDataURL(blob);
+    });
 
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
@@ -65,18 +76,37 @@ export function PhotoTimeline({ photos, onClear }: Props) {
       ) : (
         <ul className="flex max-h-[480px] flex-col gap-3 overflow-y-auto pr-1">
           {sorted.map((p) => {
-            const id = p.id;
-            const src = urls.get(objectUrlKey(p));
+            const key = objectUrlKey(p);
+            const src = dataUrlFallback.get(key) ?? urls.get(key);
             const label = parsePhotoIsoDateFromFileName(p.fileName) ?? p.fileName;
             return (
               <li
-                key={objectUrlKey(p)}
+                key={key}
                 className="flex gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-2"
               >
                 <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-md bg-zinc-800">
                   {src ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={src}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={() => {
+                        if (dataUrlAttempted.current.has(key)) return;
+                        dataUrlAttempted.current.add(key);
+                        void (async () => {
+                          try {
+                            const dataUrl = await blobToDataUrl(p.blob);
+                            setDataUrlFallback((prev) => {
+                              if (prev.has(key)) return prev;
+                              return new Map(prev).set(key, dataUrl);
+                            });
+                          } catch {
+                            dataUrlAttempted.current.delete(key);
+                          }
+                        })();
+                      }}
+                    />
                   ) : null}
                 </div>
                 <div className="min-w-0 py-1">

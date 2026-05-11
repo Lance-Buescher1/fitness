@@ -64,6 +64,7 @@ export function WeightCaloriesChart({ rows }: Props) {
               name="Calories (kcal)"
               fill="rgba(59, 130, 246, 0.25)"
               stroke="rgba(59, 130, 246, 0.35)"
+              connectNulls={false}
             />
             <Line
               yAxisId="left"

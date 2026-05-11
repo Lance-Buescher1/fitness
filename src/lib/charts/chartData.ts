@@ -3,7 +3,7 @@ import type { FitnessDay } from "@/lib/fitness/types";
 export type ChartPoint = {
   date: string;
   weight: number | null;
-  calories: number;
+  calories: number | null;
 };
 
 export function toChartPoints(rows: FitnessDay[]): ChartPoint[] {

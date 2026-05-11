@@ -35,7 +35,7 @@ export function mergeManualCsvWithExistingLedger(
         date,
         caloriesBurned: f.caloriesBurned ?? e.caloriesBurned,
         weight: f.weight ?? e.weight,
-        workoutCompleted: f.workoutCompleted,
+        workoutCompleted: f.workoutCompleted ?? e.workoutCompleted,
       });
     } else if (f != null) {
       out.set(date, f);
