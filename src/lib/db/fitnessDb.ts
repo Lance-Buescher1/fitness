@@ -76,19 +76,20 @@ export async function listPhotos(): Promise<PhotoRecord[]> {
 }
 
 export async function addPhotosFromFiles(files: File[]): Promise<void> {
-  await db.transaction("rw", db.photos, async () => {
-    for (const file of files) {
+  const prepared = await Promise.all(
+    files.map(async (file) => {
       const buf = await file.arrayBuffer();
       const blob = new Blob([buf], { type: blobTypeForImageFile(file) });
-      const existing = await db.photos.where("fileName").equals(file.name).first();
+      return { fileName: file.name, takenAt: file.lastModified, blob };
+    }),
+  );
+  await db.transaction("rw", db.photos, async () => {
+    for (const { fileName, takenAt, blob } of prepared) {
+      const existing = await db.photos.where("fileName").equals(fileName).first();
       if (existing?.id != null) {
-        await db.photos.update(existing.id, { blob, takenAt: file.lastModified });
+        await db.photos.update(existing.id, { blob, takenAt });
       } else {
-        await db.photos.add({
-          fileName: file.name,
-          takenAt: file.lastModified,
-          blob,
-        });
+        await db.photos.add({ fileName, takenAt, blob });
       }
     }
   });

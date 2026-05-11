@@ -168,10 +168,10 @@ export function SyncToolbar({
             multiple
             className="hidden"
             onChange={async (e) => {
-              const list = e.target.files;
+              const picked = e.target.files ? Array.from(e.target.files) : [];
               e.target.value = "";
-              if (!list?.length) return;
-              await onImportCsvBundle(Array.from(list), rowCount);
+              if (picked.length === 0) return;
+              await onImportCsvBundle(picked, rowCount);
             }}
           />
           <button
@@ -189,10 +189,10 @@ export function SyncToolbar({
             multiple
             className="hidden"
             onChange={async (e) => {
-              const files = e.target.files;
+              const picked = e.target.files ? Array.from(e.target.files) : [];
               e.target.value = "";
-              if (!files?.length) return;
-              await onAddPhotos(Array.from(files));
+              if (picked.length === 0) return;
+              await onAddPhotos(picked);
             }}
           />
           <button
