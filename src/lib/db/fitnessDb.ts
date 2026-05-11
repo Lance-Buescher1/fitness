@@ -2,16 +2,30 @@ import Dexie, { type Table } from "dexie";
 import type { FitnessDay } from "@/lib/fitness/types";
 import type { FitnessRowRecord, PhotoRecord } from "@/lib/db/types";
 import { parsePhotoIsoDateFromFileName } from "@/lib/dates/parsePhotoFileName";
+import { blobTypeForImageFile } from "@/lib/files/imageMime";
+
+export const GYM_DATA_DIR_META_KEY = "gymDataDirectory";
+
+export type AppMetaRecord = {
+  key: string;
+  dirHandle?: FileSystemDirectoryHandle;
+};
 
 class FitnessDexie extends Dexie {
   fitnessRows!: Table<FitnessRowRecord, string>;
   photos!: Table<PhotoRecord, number>;
+  appMeta!: Table<AppMetaRecord, string>;
 
   constructor() {
     super("gym_fitness_db");
     this.version(1).stores({
       fitnessRows: "date",
       photos: "++id, &fileName, takenAt",
+    });
+    this.version(2).stores({
+      fitnessRows: "date",
+      photos: "++id, &fileName, takenAt",
+      appMeta: "key",
     });
   }
 }
@@ -47,7 +61,8 @@ export async function listPhotos(): Promise<PhotoRecord[]> {
 
 export async function addPhotosFromFiles(files: File[]): Promise<void> {
   for (const file of files) {
-    const blob = new Blob([await file.arrayBuffer()], { type: file.type || "image/jpeg" });
+    const buf = await file.arrayBuffer();
+    const blob = new Blob([buf], { type: blobTypeForImageFile(file) });
     const existing = await db.photos.where("fileName").equals(file.name).first();
     if (existing?.id != null) {
       await db.photos.update(existing.id, { blob, takenAt: file.lastModified });
@@ -63,4 +78,17 @@ export async function addPhotosFromFiles(files: File[]): Promise<void> {
 
 export async function clearPhotos(): Promise<void> {
   await db.photos.clear();
+}
+
+export async function saveGymDataDirectoryHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+  await db.appMeta.put({ key: GYM_DATA_DIR_META_KEY, dirHandle: handle });
+}
+
+export async function loadGymDataDirectoryHandle(): Promise<FileSystemDirectoryHandle | undefined> {
+  const row = await db.appMeta.get(GYM_DATA_DIR_META_KEY);
+  return row?.dirHandle;
+}
+
+export async function clearGymDataDirectoryHandle(): Promise<void> {
+  await db.appMeta.delete(GYM_DATA_DIR_META_KEY);
 }

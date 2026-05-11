@@ -9,26 +9,34 @@ type Props = {
   onClear: () => Promise<void>;
 };
 
+function objectUrlKey(p: PhotoRecord): string {
+  return p.id != null ? `id:${p.id}` : `fn:${p.fileName}:${p.takenAt}`;
+}
+
 export function PhotoTimeline({ photos, onClear }: Props) {
-  const [urls, setUrls] = useState<Map<number, string>>(new Map());
+  const [urls, setUrls] = useState<Map<string, string>>(new Map());
 
   const sorted = useMemo(
     () => [...photos].sort((a, b) => a.fileName.localeCompare(b.fileName)),
     [photos],
   );
 
+  const photoBlobFingerprint = useMemo(
+    () => sorted.map((p) => `${objectUrlKey(p)}|${p.blob.size}|${p.takenAt}`).join("¦"),
+    [sorted],
+  );
+
   useEffect(() => {
-    const next = new Map<number, string>();
+    const next = new Map<string, string>();
     for (const p of sorted) {
-      if (p.id == null) continue;
-      next.set(p.id, URL.createObjectURL(p.blob));
+      next.set(objectUrlKey(p), URL.createObjectURL(p.blob));
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- object URLs must follow photo list updates
     setUrls(next);
     return () => {
       for (const u of next.values()) URL.revokeObjectURL(u);
     };
-  }, [sorted]);
+  }, [photoBlobFingerprint, sorted]);
 
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
@@ -58,11 +66,11 @@ export function PhotoTimeline({ photos, onClear }: Props) {
         <ul className="flex max-h-[480px] flex-col gap-3 overflow-y-auto pr-1">
           {sorted.map((p) => {
             const id = p.id;
-            const src = id != null ? urls.get(id) : undefined;
+            const src = urls.get(objectUrlKey(p));
             const label = parsePhotoIsoDateFromFileName(p.fileName) ?? p.fileName;
             return (
               <li
-                key={id ?? p.fileName}
+                key={objectUrlKey(p)}
                 className="flex gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-2"
               >
                 <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-md bg-zinc-800">
