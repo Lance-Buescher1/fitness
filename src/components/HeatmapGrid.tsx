@@ -2,7 +2,13 @@
 
 import { useMemo } from "react";
 import type { FitnessDay } from "@/lib/fitness/types";
-import { buildHeatmapCells } from "@/lib/heatmap/buildCells";
+import {
+  buildHeatmapWeekColumns,
+  formatHeatmapPanelLabel,
+  HEATMAP_TOTAL_WEEKS,
+  HEATMAP_WEEKS_PER_PANEL,
+  panelizeWeekColumns,
+} from "@/lib/heatmap/buildCells";
 import type { HeatmapMetric } from "@/lib/heatmap/types";
 import { HeatmapLegend } from "@/components/HeatmapLegend";
 
@@ -19,9 +25,14 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
     return m;
   }, [rows]);
 
-  const cells = useMemo(
-    () => buildHeatmapCells(new Date(), rowsByDate, metric),
+  const weekColumns = useMemo(
+    () => buildHeatmapWeekColumns(new Date(), rowsByDate, metric),
     [rowsByDate, metric],
+  );
+
+  const panels = useMemo(
+    () => panelizeWeekColumns(weekColumns, HEATMAP_WEEKS_PER_PANEL),
+    [weekColumns],
   );
 
   return (
@@ -48,37 +59,65 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
           <HeatmapLegend metric={metric} />
         </div>
       </div>
+
       <div
-        className="grid w-full max-w-full gap-1"
-        style={{
-          gridTemplateColumns: "repeat(53, minmax(0, 1fr))",
-          gridAutoFlow: "column",
-          gridTemplateRows: "repeat(7, minmax(0, 1fr))",
-          aspectRatio: "53 / 7",
-        }}
-        role="img"
-        aria-label="Yearly activity heatmap"
+        className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2"
+        role="region"
+        aria-label="Activity heatmap, scroll horizontally; each strip is consecutive weeks with no gaps"
       >
-        {cells.map((c) => (
-          <div
-            key={c.isoDate}
-            title={
-              metric === "workout"
-                ? `${c.isoDate}${
-                    c.workoutCompleted == null
-                      ? " · workout not logged"
-                      : c.workoutCompleted
-                        ? " · workout day"
-                        : " · rest day"
-                  }`
-                : `${c.isoDate}${c.caloriesBurned != null ? ` · ${c.caloriesBurned} kcal` : " · calories not logged"}`
-            }
-            className="min-h-[10px] rounded-sm ring-1 ring-zinc-800/80"
-            style={{ backgroundColor: cellColor(c.intensity, metric, c.caloriesBurned) }}
-          />
-        ))}
+        {panels.map((panelWeeks, panelIdx) => {
+          const nWeeks = panelWeeks.length;
+          const flat = panelWeeks.flatMap((w) => w);
+          const startIso = panelWeeks[0]?.[0]?.isoDate ?? "";
+          const lastWeek = panelWeeks[panelWeeks.length - 1];
+          const endIso = lastWeek?.[lastWeek.length - 1]?.isoDate ?? "";
+          const label = formatHeatmapPanelLabel(startIso, endIso);
+
+          return (
+            <div
+              key={`${metric}-${panelIdx}-${startIso}`}
+              className="flex w-[min(92vw,360px)] shrink-0 snap-start flex-col gap-1.5 sm:w-[min(85vw,400px)]"
+            >
+              <p className="text-center text-[11px] font-medium text-zinc-500">{label}</p>
+              <div
+                className="grid w-full max-w-full gap-1.5"
+                style={{
+                  gridTemplateColumns: `repeat(${nWeeks}, minmax(14px, 1fr))`,
+                  gridAutoFlow: "column",
+                  gridTemplateRows: "repeat(7, minmax(14px, 1fr))",
+                  aspectRatio: `${nWeeks} / 7`,
+                  minHeight: 112,
+                }}
+                role="img"
+                aria-label={`Activity heatmap ${label}`}
+              >
+                {flat.map((c) => (
+                  <div
+                    key={c.isoDate}
+                    title={
+                      metric === "workout"
+                        ? `${c.isoDate}${
+                            c.workoutCompleted == null
+                              ? " · workout not logged"
+                              : c.workoutCompleted
+                                ? " · workout day"
+                                : " · rest day"
+                          }`
+                        : `${c.isoDate}${c.caloriesBurned != null ? ` · ${c.caloriesBurned} kcal` : " · calories not logged"}`
+                    }
+                    className="min-h-[14px] rounded-sm ring-1 ring-zinc-800/80"
+                    style={{ backgroundColor: cellColor(c.intensity, metric, c.caloriesBurned) }}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
-      <p className="mt-2 text-xs text-zinc-500">Last 53 weeks · local data only</p>
+      <p className="mt-2 text-xs text-zinc-500">
+        About {Math.round(HEATMAP_TOTAL_WEEKS / 52)} years of contiguous days ({HEATMAP_TOTAL_WEEKS}{" "}
+        weeks), shown in ~{HEATMAP_WEEKS_PER_PANEL}-week strips—swipe for older months · local data only
+      </p>
     </section>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DailyLogPanel } from "@/components/DailyLogPanel";
 import { HeatmapGrid } from "@/components/HeatmapGrid";
 import { InsightsPanel } from "@/components/InsightsPanel";
 import { PhotoTimeline } from "@/components/PhotoTimeline";
@@ -8,6 +9,7 @@ import { ShortcutButtons } from "@/components/ShortcutButtons";
 import { SyncToolbar } from "@/components/SyncToolbar";
 import { WeightCaloriesChart } from "@/components/WeightCaloriesChart";
 import { useFitnessRows } from "@/hooks/useFitnessRows";
+import { useGymDataFolder } from "@/hooks/useGymDataFolder";
 import { usePhotoGallery } from "@/hooks/usePhotoGallery";
 import type { HeatmapMetric } from "@/lib/heatmap/types";
 
@@ -19,6 +21,9 @@ export function Dashboard() {
     importCsvBundle,
     importFitnessCsvFile,
     importHealthStatsCsvFile,
+    logWorkout,
+    logRestDay,
+    logWeight,
   } = useFitnessRows();
   const {
     photos,
@@ -28,6 +33,7 @@ export function Dashboard() {
     clearAll,
   } = usePhotoGallery();
   const [metric, setMetric] = useState<HeatmapMetric>("calories");
+  const gymFolder = useGymDataFolder();
 
   const combinedError = rowError ?? photoError;
 
@@ -52,7 +58,15 @@ export function Dashboard() {
         <ShortcutButtons />
       </section>
 
+      <DailyLogPanel
+        folderConnected={gymFolder.folderConnected}
+        onLogWorkout={logWorkout}
+        onLogRestDay={logRestDay}
+        onLogWeight={logWeight}
+      />
+
       <SyncToolbar
+        gymFolder={gymFolder}
         rowCount={rows.length}
         message={combinedError}
         onDismissMessage={() => {

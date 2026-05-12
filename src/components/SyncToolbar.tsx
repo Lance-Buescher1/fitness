@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useGymDataFolder } from "@/hooks/useGymDataFolder";
+import { useRef, useState } from "react";
+
+type GymFolderControls = {
+  folderConnected: boolean;
+  connectGymDataFolder: () => Promise<boolean>;
+  disconnectGymDataFolder: () => Promise<void>;
+  pickCsvFromConnectedFolder: () => Promise<File | null>;
+  pickImagesFromConnectedFolder: () => Promise<File[] | null>;
+};
 
 type Props = {
+  gymFolder: GymFolderControls;
   onImportCsvBundle: (files: File[], previousCount: number) => Promise<boolean>;
   onImportFitnessCsv: (file: File, previousCount: number) => Promise<boolean>;
   onImportHealthStatsCsv: (file: File, previousCount: number) => Promise<boolean>;
@@ -14,6 +22,7 @@ type Props = {
 };
 
 export function SyncToolbar({
+  gymFolder,
   onImportCsvBundle,
   onImportFitnessCsv,
   onImportHealthStatsCsv,
@@ -27,22 +36,19 @@ export function SyncToolbar({
   const healthCsvRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  const [fsPickSupported, setFsPickSupported] = useState(false);
+  const [fsPickSupported] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      "showDirectoryPicker" in window &&
+      "showOpenFilePicker" in window,
+  );
   const {
     folderConnected,
     connectGymDataFolder,
     disconnectGymDataFolder,
     pickCsvFromConnectedFolder,
     pickImagesFromConnectedFolder,
-  } = useGymDataFolder();
-
-  useEffect(() => {
-    setFsPickSupported(
-      typeof window !== "undefined" &&
-        "showDirectoryPicker" in window &&
-        "showOpenFilePicker" in window,
-    );
-  }, []);
+  } = gymFolder;
 
   const runFitnessImport = async (file: File | null | undefined) => {
     if (!file) return;
@@ -63,7 +69,8 @@ export function SyncToolbar({
             Import <code className="text-zinc-400">fitness.csv</code> and{" "}
             <code className="text-zinc-400">health_stats.csv</code> separately (merged into this
             browser), or both at once. Connect your <strong>GymData</strong> folder once on supported
-            browsers so file picks start in that folder.
+            browsers (read/write) so imports start there and quick logs can update{" "}
+            <code className="text-zinc-400">fitness.csv</code>.
           </p>
         </div>
 

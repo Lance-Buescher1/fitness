@@ -44,6 +44,30 @@ export async function listFitnessRows(): Promise<FitnessDay[]> {
   return all.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export async function getFitnessRow(date: string): Promise<FitnessDay | undefined> {
+  return db.fitnessRows.get(date);
+}
+
+/** Merge `partial` onto existing row for `date` (missing keys keep prior values). */
+export async function upsertFitnessDayMerge(
+  date: string,
+  partial: Partial<Pick<FitnessDay, "caloriesBurned" | "weight" | "workoutCompleted">>,
+): Promise<FitnessDay> {
+  const prev = await db.fitnessRows.get(date);
+  const next: FitnessDay = {
+    date,
+    caloriesBurned:
+      partial.caloriesBurned !== undefined ? partial.caloriesBurned : (prev?.caloriesBurned ?? null),
+    weight: partial.weight !== undefined ? partial.weight : (prev?.weight ?? null),
+    workoutCompleted:
+      partial.workoutCompleted !== undefined
+        ? partial.workoutCompleted
+        : (prev?.workoutCompleted ?? null),
+  };
+  await db.fitnessRows.put(next);
+  return next;
+}
+
 function sortKeyForPhoto(p: PhotoRecord): string {
   const fromName = parsePhotoIsoDateFromFileName(p.fileName);
   if (fromName) return fromName;
