@@ -17,7 +17,9 @@ export function useGymDataFolder() {
   }, []);
 
   useEffect(() => {
-    void refreshConnected();
+    queueMicrotask(() => {
+      void refreshConnected();
+    });
   }, [refreshConnected]);
 
   const connectGymDataFolder = useCallback(async (): Promise<boolean> => {
@@ -29,7 +31,7 @@ export function useGymDataFolder() {
     };
     if (!w.showDirectoryPicker) return false;
     try {
-      const handle = await w.showDirectoryPicker({ mode: "read" });
+      const handle = await w.showDirectoryPicker({ mode: "readwrite" });
       await saveGymDataDirectoryHandle(handle);
       setFolderConnected(true);
       return true;

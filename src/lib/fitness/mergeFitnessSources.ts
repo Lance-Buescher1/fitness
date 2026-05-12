@@ -7,7 +7,8 @@ export type MergeFitnessSourcesResult =
 
 /**
  * Merges manual rows (`fitness.csv`) with HealthKit-style stats (`health_stats.csv`).
- * Calories: stats win when present for a date; otherwise manual row must include calories.
+ * Calories: stats win when present; otherwise manual cell; otherwise `null` (not logged).
+ * Workout: from manual when present; otherwise `null` (not logged).
  */
 export function mergeFitnessSources(
   manualByDate: Map<string, ManualFitnessDay>,
@@ -15,7 +16,6 @@ export function mergeFitnessSources(
 ): MergeFitnessSourcesResult {
   const dates = new Set<string>([...manualByDate.keys(), ...maxCaloriesByDate.keys()]);
   const sorted = Array.from(dates).sort((a, b) => a.localeCompare(b));
-  const errors: string[] = [];
   const rows: FitnessDay[] = [];
 
   for (const date of sorted) {
@@ -24,22 +24,20 @@ export function mergeFitnessSources(
     const caloriesBurned =
       statsCalories !== undefined ? statsCalories : (manual?.caloriesBurned ?? null);
 
-    if (caloriesBurned === null || !Number.isFinite(caloriesBurned) || caloriesBurned < 0) {
-      errors.push(
-        `Date ${date}: missing calories (add a health_stats row or set calories_burned in fitness.csv).`,
-      );
-      continue;
+    if (caloriesBurned != null && (!Number.isFinite(caloriesBurned) || caloriesBurned < 0)) {
+      return {
+        ok: false,
+        errors: [`Date ${date}: invalid calories_burned (must be empty or a non‑negative number).`],
+      };
     }
 
     rows.push({
       date,
       caloriesBurned,
       weight: manual?.weight ?? null,
-      workoutCompleted: manual?.workoutCompleted ?? false,
+      workoutCompleted: manual?.workoutCompleted ?? null,
     });
   }
-
-  if (errors.length > 0) return { ok: false, errors };
 
   return { ok: true, rows };
 }

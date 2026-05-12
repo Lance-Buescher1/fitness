@@ -2,12 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { FitnessDay } from "@/lib/fitness/types";
-import { listFitnessRows, replaceFitnessRows } from "@/lib/db/fitnessDb";
+import {
+  listFitnessRows,
+  replaceFitnessRows,
+  upsertFitnessDayMerge,
+} from "@/lib/db/fitnessDb";
 import { mergeHealthStatsCsvWithExisting } from "@/lib/fitness/mergeHealthStatsWithExisting";
 import { mergeManualCsvWithExistingLedger } from "@/lib/fitness/mergeManualWithExisting";
 import { parseFitnessCsv } from "@/lib/fitness/parseCsv";
 import { parseManualFitnessCsv } from "@/lib/fitness/parseManualFitnessCsv";
 import { resolveFitnessCsvImport } from "@/lib/fitness/resolveFitnessCsvImport";
+import { serializeManualFitnessCsv } from "@/lib/fitness/serializeManualFitnessCsv";
+import { writeFitnessCsvToGymFolder } from "@/lib/files/writeFitnessCsvToGymFolder";
 
 export function useFitnessRows() {
   const [rows, setRows] = useState<FitnessDay[]>([]);
@@ -28,6 +34,15 @@ export function useFitnessRows() {
     } finally {
       if (signal?.aborted) return;
       setLoading(false);
+    }
+  }, []);
+
+  const reloadRowsQuiet = useCallback(async () => {
+    try {
+      const data = await listFitnessRows();
+      setRows(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load fitness data");
     }
   }, []);
 
@@ -103,6 +118,57 @@ export function useFitnessRows() {
     [commitImportedRows],
   );
 
+  const syncFitnessCsvToGymFolder = useCallback(async (): Promise<void> => {
+    const data = await listFitnessRows();
+    const csv = serializeManualFitnessCsv(data);
+    const w = await writeFitnessCsvToGymFolder(csv);
+    if (!w.ok && w.reason === "write_failed") {
+      setError(
+        `Saved locally but could not write fitness.csv to your GymData folder${
+          w.detail ? `: ${w.detail}` : ""
+        }. Try reconnecting the folder (read/write permission).`,
+      );
+    }
+  }, []);
+
+  const logWorkout = useCallback(
+    async (date: string, caloriesBurned?: number | null): Promise<void> => {
+      setError(null);
+      const patch: Parameters<typeof upsertFitnessDayMerge>[1] = { workoutCompleted: true };
+      if (caloriesBurned != null && Number.isFinite(caloriesBurned) && caloriesBurned >= 0) {
+        patch.caloriesBurned = caloriesBurned;
+      }
+      await upsertFitnessDayMerge(date, patch);
+      await reloadRowsQuiet();
+      await syncFitnessCsvToGymFolder();
+    },
+    [reloadRowsQuiet, syncFitnessCsvToGymFolder],
+  );
+
+  const logRestDay = useCallback(
+    async (date: string): Promise<void> => {
+      setError(null);
+      await upsertFitnessDayMerge(date, { workoutCompleted: false });
+      await reloadRowsQuiet();
+      await syncFitnessCsvToGymFolder();
+    },
+    [reloadRowsQuiet, syncFitnessCsvToGymFolder],
+  );
+
+  const logWeight = useCallback(
+    async (date: string, weight: number): Promise<void> => {
+      setError(null);
+      if (!Number.isFinite(weight) || weight <= 0) {
+        setError("Weight must be a positive number.");
+        return;
+      }
+      await upsertFitnessDayMerge(date, { weight });
+      await reloadRowsQuiet();
+      await syncFitnessCsvToGymFolder();
+    },
+    [reloadRowsQuiet, syncFitnessCsvToGymFolder],
+  );
+
   return {
     rows,
     loading,
@@ -112,5 +178,8 @@ export function useFitnessRows() {
     importCsvBundle,
     importFitnessCsvFile,
     importHealthStatsCsvFile,
+    logWorkout,
+    logRestDay,
+    logWeight,
   };
 }

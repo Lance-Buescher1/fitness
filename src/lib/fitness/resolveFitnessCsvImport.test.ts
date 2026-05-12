@@ -30,7 +30,7 @@ describe("resolveFitnessCsvImport", () => {
     expect(r.rows[0].date).toBe("2025-10-01");
     expect(r.rows[0].caloriesBurned).toBe(2600);
     expect(r.rows[0].weight).toBeNull();
-    expect(r.rows[0].workoutCompleted).toBe(false);
+    expect(r.rows[0].workoutCompleted).toBeNull();
   });
 
   it("merges manual + health_stats (stats wins calories; manual keeps weight)", () => {
@@ -73,7 +73,7 @@ describe("resolveFitnessCsvImport", () => {
     expect(r.ok).toBe(false);
   });
 
-  it("errors when manual row has no calories and stats omit that date", () => {
+  it("keeps manual-only dates with missing calories as not logged", () => {
     const manualOnly = `date,calories_burned,weight,workout_completed
 2025-10-02,,180,true
 `;
@@ -81,9 +81,12 @@ describe("resolveFitnessCsvImport", () => {
       { filename: "fitness.csv", text: manualOnly },
       { filename: "health_stats.csv", text: stats },
     ]);
-    expect(r.ok).toBe(false);
-    if (r.ok) return;
-    expect(r.errors.some((e) => e.includes("2025-10-02"))).toBe(true);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const oct2 = r.rows.find((x) => x.date === "2025-10-02");
+    expect(oct2?.caloriesBurned).toBeNull();
+    expect(oct2?.weight).toBe(180);
+    expect(oct2?.workoutCompleted).toBe(true);
   });
 
   it("allows extra columns on health_stats", () => {

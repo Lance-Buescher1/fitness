@@ -34,7 +34,7 @@ Paths match the project plan (iCloud or **On My iPhone** is fine—see [shortcut
 In the PWA, use **Import fitness.csv** and **Import health_stats.csv** separately (each merges into what is already in the browser), or **Replace all (1–2 CSVs)** for a full reload from disk. On desktop Chrome/Edge you can **Connect GymData folder** once so CSV/photo picks open inside that folder (`showOpenFilePicker` with `startIn`). iOS Safari cannot pre-select an iCloud folder; use the separate import buttons and pick each file from Files.
 
 **`fitness.csv` header (required):** `date,calories_burned,weight,workout_completed`  
-Example: `2025-10-01,,185.5,true` (empty calories is OK when you import with `health_stats.csv`).
+Example: `2025-10-01,,185.5,true` (empty calories is OK when you import with `health_stats.csv`, or calories stay “not logged” in the app). Leave **`workout_completed` empty** for a day if you did not log workout vs rest (`true` / `false` / `yes` / `no` / `1` / `0` still work).
 
 **`health_stats.csv` header (minimum):** `date,calories_burned`  
 Example: `2025-10-01,2450` — same-day duplicates use the **maximum** calories value.

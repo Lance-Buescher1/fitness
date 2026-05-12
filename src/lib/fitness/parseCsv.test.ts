@@ -27,6 +27,16 @@ describe("parseFitnessCsv", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("treats empty workout_completed as not logged", () => {
+    const csv = `date,calories_burned,weight,workout_completed
+2025-10-05,100,200,
+`;
+    const r = parseFitnessCsv(csv);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.rows[0].workoutCompleted).toBeNull();
+  });
+
   it("dedupes duplicate dates", () => {
     const csv = `date,calories_burned,weight,workout_completed
 2025-10-01,100,180,true

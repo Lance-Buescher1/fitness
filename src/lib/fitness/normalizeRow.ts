@@ -1,5 +1,5 @@
 import type { FitnessDay } from "@/lib/fitness/types";
-import { parseBooleanLoose } from "@/lib/fitness/parseBoolean";
+import { parseWorkoutCompletedField } from "@/lib/fitness/parseBoolean";
 
 export type RawFitnessRow = Record<string, string | undefined>;
 
@@ -13,12 +13,16 @@ export function normalizeFitnessRow(
   }
 
   const caloriesRaw = (raw.calories_burned ?? "").trim();
-  const caloriesBurned = Number(caloriesRaw);
-  if (!Number.isFinite(caloriesBurned) || caloriesBurned < 0) {
-    return {
-      ok: false,
-      error: `Row ${rowIndex + 1}: invalid calories_burned "${raw.calories_burned}"`,
-    };
+  let caloriesBurned: number | null = null;
+  if (caloriesRaw !== "" && caloriesRaw !== "null") {
+    const n = Number(caloriesRaw);
+    if (!Number.isFinite(n) || n < 0) {
+      return {
+        ok: false,
+        error: `Row ${rowIndex + 1}: invalid calories_burned "${raw.calories_burned}"`,
+      };
+    }
+    caloriesBurned = n;
   }
 
   const weightRaw = (raw.weight ?? "").trim();
@@ -36,7 +40,7 @@ export function normalizeFitnessRow(
       date,
       caloriesBurned,
       weight,
-      workoutCompleted: parseBooleanLoose(raw.workout_completed),
+      workoutCompleted: parseWorkoutCompletedField(raw.workout_completed),
     },
   };
 }

@@ -2,7 +2,7 @@ import Dexie, { type Table } from "dexie";
 import type { FitnessDay } from "@/lib/fitness/types";
 import type { FitnessRowRecord, PhotoRecord } from "@/lib/db/types";
 import { parsePhotoIsoDateFromFileName } from "@/lib/dates/parsePhotoFileName";
-import { blobTypeForImageFile } from "@/lib/files/imageMime";
+import { blobTypeForImageFile, guessImageMimeFromFileName } from "@/lib/files/imageMime";
 
 export const GYM_DATA_DIR_META_KEY = "gymDataDirectory";
 
@@ -44,6 +44,30 @@ export async function listFitnessRows(): Promise<FitnessDay[]> {
   return all.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export async function getFitnessRow(date: string): Promise<FitnessDay | undefined> {
+  return db.fitnessRows.get(date);
+}
+
+/** Merge `partial` onto existing row for `date` (missing keys keep prior values). */
+export async function upsertFitnessDayMerge(
+  date: string,
+  partial: Partial<Pick<FitnessDay, "caloriesBurned" | "weight" | "workoutCompleted">>,
+): Promise<FitnessDay> {
+  const prev = await db.fitnessRows.get(date);
+  const next: FitnessDay = {
+    date,
+    caloriesBurned:
+      partial.caloriesBurned !== undefined ? partial.caloriesBurned : (prev?.caloriesBurned ?? null),
+    weight: partial.weight !== undefined ? partial.weight : (prev?.weight ?? null),
+    workoutCompleted:
+      partial.workoutCompleted !== undefined
+        ? partial.workoutCompleted
+        : (prev?.workoutCompleted ?? null),
+  };
+  await db.fitnessRows.put(next);
+  return next;
+}
+
 function sortKeyForPhoto(p: PhotoRecord): string {
   const fromName = parsePhotoIsoDateFromFileName(p.fileName);
   if (fromName) return fromName;
@@ -54,26 +78,45 @@ function sortKeyForPhoto(p: PhotoRecord): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * WebKit often hands back Blobs from IndexedDB that do not paint reliably with
+ * `URL.createObjectURL` until copied into a fresh Blob with an explicit MIME type.
+ */
+async function materializeStoredPhotoBlob(row: PhotoRecord): Promise<PhotoRecord> {
+  const raw = row.blob;
+  const source = raw instanceof Blob ? raw : new Blob([], { type: "application/octet-stream" });
+  const buf = await source.arrayBuffer();
+  const type =
+    source.type && source.type !== "application/octet-stream"
+      ? source.type
+      : guessImageMimeFromFileName(row.fileName);
+  return { ...row, blob: new Blob([buf], { type }) };
+}
+
 export async function listPhotos(): Promise<PhotoRecord[]> {
   const items = await db.photos.toArray();
-  return items.sort((a, b) => sortKeyForPhoto(a).localeCompare(sortKeyForPhoto(b)));
+  const materialized = await Promise.all(items.map((row) => materializeStoredPhotoBlob(row)));
+  return materialized.sort((a, b) => sortKeyForPhoto(a).localeCompare(sortKeyForPhoto(b)));
 }
 
 export async function addPhotosFromFiles(files: File[]): Promise<void> {
-  for (const file of files) {
-    const buf = await file.arrayBuffer();
-    const blob = new Blob([buf], { type: blobTypeForImageFile(file) });
-    const existing = await db.photos.where("fileName").equals(file.name).first();
-    if (existing?.id != null) {
-      await db.photos.update(existing.id, { blob, takenAt: file.lastModified });
-    } else {
-      await db.photos.add({
-        fileName: file.name,
-        takenAt: file.lastModified,
-        blob,
-      });
+  const prepared = await Promise.all(
+    files.map(async (file) => {
+      const buf = await file.arrayBuffer();
+      const blob = new Blob([buf], { type: blobTypeForImageFile(file) });
+      return { fileName: file.name, takenAt: file.lastModified, blob };
+    }),
+  );
+  await db.transaction("rw", db.photos, async () => {
+    for (const { fileName, takenAt, blob } of prepared) {
+      const existing = await db.photos.where("fileName").equals(fileName).first();
+      if (existing?.id != null) {
+        await db.photos.update(existing.id, { blob, takenAt });
+      } else {
+        await db.photos.add({ fileName, takenAt, blob });
+      }
     }
-  }
+  });
 }
 
 export async function clearPhotos(): Promise<void> {

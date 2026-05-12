@@ -9,10 +9,13 @@ export function HeatmapLegend({ metric }: Props) {
     return (
       <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400">
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block size-3 rounded-sm bg-zinc-800 ring-1 ring-zinc-700" /> No entry
+          <span className="inline-block size-3 rounded-sm bg-zinc-800 ring-1 ring-zinc-700" /> No row
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block size-3 rounded-sm bg-emerald-900/60 ring-1 ring-zinc-700" /> Logged
+          <span className="inline-block size-3 rounded-sm bg-zinc-600/65 ring-1 ring-zinc-700" /> Not logged
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block size-3 rounded-sm bg-emerald-900/60 ring-1 ring-zinc-700" /> Rest
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="inline-block size-3 rounded-sm bg-emerald-500/80 ring-1 ring-zinc-700" /> Workout
