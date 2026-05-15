@@ -50,25 +50,32 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollLeft = el.scrollWidth - el.clientWidth;
-  }, [metric, rangeMode, panels]);
+    const scrollToEnd = () => {
+      el.scrollLeft = el.scrollWidth - el.clientWidth;
+    };
+    scrollToEnd();
+    requestAnimationFrame(scrollToEnd);
+  }, [metric, rangeMode]);
 
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative z-10 mb-3 flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-zinc-100">Consistency</h2>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
           <div className="flex rounded-lg border border-zinc-800 p-0.5 text-xs">
             <button
               type="button"
-              className={`min-h-11 rounded-md px-2.5 py-1.5 ${rangeMode === "recent" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
+              aria-pressed={rangeMode === "recent"}
+              className={`min-h-11 touch-manipulation rounded-md px-2.5 py-1.5 ${rangeMode === "recent" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
               onClick={() => setRangeMode("recent")}
             >
               Last 12 weeks
             </button>
             <button
               type="button"
-              className={`min-h-11 rounded-md px-2.5 py-1.5 ${rangeMode === "full" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
+              aria-pressed={rangeMode === "full"}
+              className={`min-h-11 touch-manipulation rounded-md px-2.5 py-1.5 ${rangeMode === "full" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
               onClick={() => setRangeMode("full")}
             >
               Full history
@@ -77,18 +84,21 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
           <div className="flex rounded-lg border border-zinc-800 p-0.5 text-xs">
             <button
               type="button"
-              className={`min-h-11 rounded-md px-2.5 py-1.5 ${metric === "calories" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
+              aria-pressed={metric === "calories"}
+              className={`min-h-11 touch-manipulation rounded-md px-2.5 py-1.5 ${metric === "calories" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
               onClick={() => onMetricChange("calories")}
             >
               Calories
             </button>
             <button
               type="button"
-              className={`min-h-11 rounded-md px-2.5 py-1.5 ${metric === "workout" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
+              aria-pressed={metric === "workout"}
+              className={`min-h-11 touch-manipulation rounded-md px-2.5 py-1.5 ${metric === "workout" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
               onClick={() => onMetricChange("workout")}
             >
               Workout
             </button>
+          </div>
           </div>
           <HeatmapLegend metric={metric} />
         </div>
@@ -96,7 +106,7 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
 
       <div
         ref={scrollRef}
-        className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2"
+        className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-1 pb-2 touch-pan-x"
         role="region"
         aria-label="Activity heatmap, scroll horizontally; each strip is consecutive weeks with no gaps"
       >
