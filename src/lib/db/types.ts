@@ -7,4 +7,7 @@ export type PhotoRecord = {
   fileName: string;
   takenAt: number;
   blob: Blob;
+  /** True when loaded from or saved to PhotosFramed (crop already applied). */
+  isFramed?: boolean;
+  framedFileName?: string;
 };

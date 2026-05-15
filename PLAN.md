@@ -63,16 +63,18 @@ date,calories_burned
 2025-10-01,2450
 ```
 
-### Photo Folder
+### Photo Folders
 
-**Stored in:**  
-`iCloud Drive/Shortcuts/GymData/Photos/`
+**Originals (Shortcuts / camera):**  
+`iCloud Drive/Shortcuts/GymData/Photos/`  
+Files named `IMG_YYYYMMDD.jpg` when possible.
 
-**Files named:**  
-`IMG_YYYYMMDD.jpg`
+**Framed (app output, durable):**  
+`iCloud Drive/Shortcuts/GymData/PhotosFramed/`  
+Cropped JPEGs written when you frame in the dashboard. Clearing the in-browser photo cache does not delete these files. Use **Load framed photos** to repopulate the viewer without re-framing.
 
 **Accessed via:**  
-File System Access API (Local picker)
+File System Access API when connected on desktop Chromium; file picker on iPhone.
 
 ---
 

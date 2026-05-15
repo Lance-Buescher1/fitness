@@ -16,7 +16,8 @@ Create this layout (example under **Shortcuts → GymData**):
 |------|---------|
 | `…/GymData/fitness.csv` | **You** edit: weight, workout, optional calories (Shortcuts do not append here) |
 | `…/GymData/health_stats.csv` | **SyncCalories** appends: HealthKit calories (and future numeric columns) |
-| `…/GymData/Photos/` | **TakePhoto** saves progress images |
+| `…/GymData/Photos/` | **TakePhoto** saves progress images (originals) |
+| `…/GymData/PhotosFramed/` | Dashboard **Frame** saves cropped JPEGs; use **Load framed photos** after clearing cache |
 
 **Create `fitness.csv` once** with only this header (lowercase names):
 
