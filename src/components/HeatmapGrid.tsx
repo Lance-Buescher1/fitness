@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { FitnessDay } from "@/lib/fitness/types";
 import {
   buildHeatmapWeekColumns,
@@ -21,6 +21,47 @@ type Props = {
   metric: HeatmapMetric;
   onMetricChange: (m: HeatmapMetric) => void;
 };
+
+function ToggleGroup({
+  children,
+  "aria-label": ariaLabel,
+}: {
+  children: ReactNode;
+  "aria-label"?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="relative z-30 flex rounded-lg border border-zinc-800 bg-zinc-900 p-0.5 text-xs"
+    >
+      {children}
+    </div>
+  );
+}
+
+function ToggleButton({
+  pressed,
+  onClick,
+  children,
+}: {
+  pressed: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      className={`relative z-30 min-h-11 cursor-pointer touch-manipulation rounded-md px-2.5 py-1.5 ${
+        pressed ? "bg-zinc-800 text-zinc-50" : "text-zinc-400 hover:text-zinc-200"
+      }`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
   const [rangeMode, setRangeMode] = useState<RangeMode>("recent");
@@ -58,94 +99,81 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
   }, [metric, rangeMode]);
 
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-      <div className="relative z-10 mb-3 flex flex-col gap-3">
+    <section className="relative flex flex-col gap-3 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+      <header className="relative z-30 shrink-0 space-y-3 bg-zinc-950">
         <h2 className="text-sm font-semibold text-zinc-100">Consistency</h2>
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap gap-2">
-          <div className="flex rounded-lg border border-zinc-800 p-0.5 text-xs">
-            <button
-              type="button"
-              aria-pressed={rangeMode === "recent"}
-              className={`min-h-11 touch-manipulation rounded-md px-2.5 py-1.5 ${rangeMode === "recent" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
-              onClick={() => setRangeMode("recent")}
-            >
-              Last 12 weeks
-            </button>
-            <button
-              type="button"
-              aria-pressed={rangeMode === "full"}
-              className={`min-h-11 touch-manipulation rounded-md px-2.5 py-1.5 ${rangeMode === "full" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
-              onClick={() => setRangeMode("full")}
-            >
-              Full history
-            </button>
-          </div>
-          <div className="flex rounded-lg border border-zinc-800 p-0.5 text-xs">
-            <button
-              type="button"
-              aria-pressed={metric === "calories"}
-              className={`min-h-11 touch-manipulation rounded-md px-2.5 py-1.5 ${metric === "calories" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
-              onClick={() => onMetricChange("calories")}
-            >
-              Calories
-            </button>
-            <button
-              type="button"
-              aria-pressed={metric === "workout"}
-              className={`min-h-11 touch-manipulation rounded-md px-2.5 py-1.5 ${metric === "workout" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
-              onClick={() => onMetricChange("workout")}
-            >
-              Workout
-            </button>
-          </div>
+            <ToggleGroup aria-label="Heatmap date range">
+              <ToggleButton pressed={rangeMode === "recent"} onClick={() => setRangeMode("recent")}>
+                Last 12 weeks
+              </ToggleButton>
+              <ToggleButton pressed={rangeMode === "full"} onClick={() => setRangeMode("full")}>
+                Full history
+              </ToggleButton>
+            </ToggleGroup>
+            <ToggleGroup aria-label="Heatmap metric">
+              <ToggleButton pressed={metric === "calories"} onClick={() => onMetricChange("calories")}>
+                Calories
+              </ToggleButton>
+              <ToggleButton pressed={metric === "workout"} onClick={() => onMetricChange("workout")}>
+                Workout
+              </ToggleButton>
+            </ToggleGroup>
           </div>
           <HeatmapLegend metric={metric} />
         </div>
-      </div>
+      </header>
 
       <div
         ref={scrollRef}
-        className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-1 pb-2 touch-pan-x"
+        className="relative z-0 min-h-0 w-full overflow-x-auto overflow-y-hidden overscroll-x-contain"
         role="region"
         aria-label="Activity heatmap, scroll horizontally; each strip is consecutive weeks with no gaps"
       >
-        {panels.map((panelWeeks, panelIdx) => {
-          const nWeeks = panelWeeks.length;
-          const realWeeks = panelWeeks.filter((w) => !w[0]?.isPlaceholder);
-          const flat = panelWeeks.flatMap((w) => w);
-          const startIso = realWeeks[0]?.[0]?.isoDate ?? "";
-          const lastWeek = realWeeks[realWeeks.length - 1];
-          const endIso = lastWeek?.[lastWeek.length - 1]?.isoDate ?? "";
-          const label = formatHeatmapPanelLabel(startIso, endIso);
+        <div className="flex w-max gap-4 pb-1">
+          {panels.map((panelWeeks, panelIdx) => {
+            const nWeeks = panelWeeks.length;
+            const realWeeks = panelWeeks.filter((w) => !w[0]?.isPlaceholder);
+            const flat = panelWeeks.flatMap((w) => w);
+            const startIso = realWeeks[0]?.[0]?.isoDate ?? "";
+            const lastWeek = realWeeks[realWeeks.length - 1];
+            const endIso = lastWeek?.[lastWeek.length - 1]?.isoDate ?? "";
+            const label = formatHeatmapPanelLabel(startIso, endIso);
 
-          return (
-            <div
-              key={`${metric}-${rangeMode}-${panelIdx}-${startIso}`}
-              className="flex w-[min(92vw,360px)] shrink-0 snap-start flex-col gap-1.5 sm:w-[min(85vw,400px)]"
-            >
-              <p className="text-center text-[11px] font-medium text-zinc-500">{label}</p>
+            return (
               <div
-                className="grid w-full max-w-full gap-1.5"
-                style={{
-                  gridTemplateColumns: `repeat(${nWeeks}, minmax(14px, 1fr))`,
-                  gridAutoFlow: "column",
-                  gridTemplateRows: "repeat(7, minmax(14px, 1fr))",
-                  aspectRatio: `${nWeeks} / 7`,
-                  minHeight: 112,
-                }}
-                role="img"
-                aria-label={`Activity heatmap ${label}`}
+                key={`${metric}-${rangeMode}-${panelIdx}-${startIso}`}
+                className="flex w-[min(92vw,360px)] shrink-0 snap-start flex-col gap-1.5 sm:w-[min(85vw,400px)]"
               >
-                {flat.map((c, i) => (
-                  <HeatmapDayCell key={c.isPlaceholder ? `pad-${panelIdx}-${i}` : c.isoDate} cell={c} metric={metric} />
-                ))}
+                <p className="text-center text-[11px] font-medium text-zinc-500">{label}</p>
+                <div
+                  className="grid w-full max-w-full gap-1.5"
+                  style={{
+                    gridTemplateColumns: `repeat(${nWeeks}, minmax(14px, 1fr))`,
+                    gridAutoFlow: "column",
+                    gridTemplateRows: "repeat(7, minmax(14px, 1fr))",
+                    aspectRatio: `${nWeeks} / 7`,
+                    minHeight: 112,
+                  }}
+                  role="img"
+                  aria-label={`Activity heatmap ${label}`}
+                >
+                  {flat.map((c, i) => (
+                    <HeatmapDayCell
+                      key={c.isPlaceholder ? `pad-${panelIdx}-${i}` : c.isoDate}
+                      cell={c}
+                      metric={metric}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
-      <p className="mt-2 text-xs text-zinc-500">
+
+      <p className="relative z-0 shrink-0 text-xs text-zinc-500">
         {rangeMode === "recent" ? (
           <>
             Last {HEATMAP_RECENT_WEEKS} weeks · switch to full history for about{" "}
@@ -164,12 +192,7 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
 
 function HeatmapDayCell({ cell, metric }: { cell: HeatmapCell; metric: HeatmapMetric }) {
   if (cell.isPlaceholder) {
-    return (
-      <div
-        aria-hidden
-        className="min-h-[14px] rounded-sm bg-transparent ring-0"
-      />
-    );
+    return <div aria-hidden className="min-h-[14px] rounded-sm bg-transparent" />;
   }
 
   return (

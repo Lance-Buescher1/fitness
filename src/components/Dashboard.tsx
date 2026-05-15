@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { DailyLogPanel } from "@/components/DailyLogPanel";
 import { HeatmapGrid } from "@/components/HeatmapGrid";
 import { InsightsPanel } from "@/components/InsightsPanel";
+import { PhotoFrameEditor } from "@/components/PhotoFrameEditor";
 import { PhotoTimeline } from "@/components/PhotoTimeline";
 import { ShortcutButtons } from "@/components/ShortcutButtons";
 import { SyncToolbar } from "@/components/SyncToolbar";
@@ -12,7 +13,10 @@ import { useFileSystemAccessSupport } from "@/hooks/useFileSystemAccessSupport";
 import { useFitnessRows } from "@/hooks/useFitnessRows";
 import { useGymDataFolder } from "@/hooks/useGymDataFolder";
 import { usePhotoGallery } from "@/hooks/usePhotoGallery";
+import type { PhotoRecord } from "@/lib/db/types";
 import type { HeatmapMetric } from "@/lib/heatmap/types";
+import type { NormalizedCropRect } from "@/lib/photos/cropImageBlob";
+import { photoSortKey } from "@/lib/photos/photoSortKey";
 
 export function Dashboard() {
   const {
@@ -33,12 +37,74 @@ export function Dashboard() {
     error: photoError,
     setError: setPhotoError,
     addFromFiles,
+    loadFramedFromFiles,
+    saveFramedPhoto,
+    applyFrameToAll,
+    pendingFrameQueue,
+    clearPendingFrameQueue,
     clearAll,
   } = usePhotoGallery();
   const [metric, setMetric] = useState<HeatmapMetric>("calories");
+  const [framingPhoto, setFramingPhoto] = useState<PhotoRecord | null>(null);
+  const [applyAllAfterSave, setApplyAllAfterSave] = useState(false);
+  const [photoFrameMsg, setPhotoFrameMsg] = useState<string | null>(null);
   const gymFolder = useGymDataFolder();
 
   const combinedError = rowError ?? photoError;
+
+  const mapExportResult = (result: Awaited<ReturnType<typeof exportFitnessCsvFile>>) => ({
+    ok: result.ok,
+    method: result.ok ? result.method : undefined,
+    detail: !result.ok ? result.detail : undefined,
+  });
+
+  const closeFrameEditor = useCallback(() => {
+    setFramingPhoto(null);
+    setApplyAllAfterSave(false);
+  }, []);
+
+  const handleRequestFrame = useCallback(
+    (photo: PhotoRecord, options?: { applyToAllAfterSave?: boolean }) => {
+      setApplyAllAfterSave(options?.applyToAllAfterSave ?? false);
+      setFramingPhoto(photo);
+    },
+    [],
+  );
+
+  const handleSaveFrame = useCallback(
+    async (rect: NormalizedCropRect) => {
+      if (!framingPhoto) return;
+      const warn = await saveFramedPhoto(framingPhoto, rect, gymFolder.folderConnected);
+      setPhotoFrameMsg(warn);
+
+      if (applyAllAfterSave) {
+        const sorted = [...photos].sort((a, b) => {
+          const ka = photoSortKey(a);
+          const kb = photoSortKey(b);
+          if (ka !== kb) return ka.localeCompare(kb);
+          return a.fileName.localeCompare(b.fileName);
+        });
+        const others = sorted.filter((p) => p.id !== framingPhoto.id && !p.isFramed);
+        if (others.length > 0) {
+          const bulkWarn = await applyFrameToAll(rect, others, gymFolder.folderConnected);
+          if (bulkWarn) setPhotoFrameMsg(bulkWarn);
+        }
+      }
+
+      closeFrameEditor();
+      clearPendingFrameQueue();
+    },
+    [
+      applyAllAfterSave,
+      applyFrameToAll,
+      clearPendingFrameQueue,
+      closeFrameEditor,
+      framingPhoto,
+      gymFolder.folderConnected,
+      photos,
+      saveFramedPhoto,
+    ],
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
@@ -64,10 +130,7 @@ export function Dashboard() {
       <DailyLogPanel
         folderConnected={gymFolder.folderConnected}
         fsPickSupported={fsPickSupported}
-        onExportFitnessCsv={async () => {
-          const result = await exportFitnessCsvFile();
-          return { ok: result.ok };
-        }}
+        onExportFitnessCsv={async () => mapExportResult(await exportFitnessCsvFile())}
         onLogWorkout={logWorkout}
         onLogRestDay={logRestDay}
         onLogWeight={logWeight}
@@ -85,10 +148,8 @@ export function Dashboard() {
         onImportFitnessCsv={(file, prev) => importFitnessCsvFile(file, prev)}
         onImportHealthStatsCsv={(file, prev) => importHealthStatsCsvFile(file, prev)}
         onAddPhotos={(files) => addFromFiles(files)}
-        onExportFitnessCsv={async () => {
-          const result = await exportFitnessCsvFile();
-          return { ok: result.ok };
-        }}
+        onLoadFramedPhotos={(files) => loadFramedFromFiles(files)}
+        onExportFitnessCsv={async () => mapExportResult(await exportFitnessCsvFile())}
       />
 
       <HeatmapGrid rows={rows} metric={metric} onMetricChange={setMetric} />
@@ -98,7 +159,28 @@ export function Dashboard() {
         <InsightsPanel rows={rows} />
       </div>
 
-      <PhotoTimeline photos={photos} onClear={clearAll} />
+      <PhotoTimeline
+        photos={photos}
+        frameMsg={photoFrameMsg}
+        onClear={clearAll}
+        pendingFrameQueue={pendingFrameQueue}
+        onDismissFrameQueue={clearPendingFrameQueue}
+        onRequestFrame={handleRequestFrame}
+      />
+
+      {framingPhoto ? (
+        <PhotoFrameEditor
+          blob={framingPhoto.blob}
+          fileName={framingPhoto.fileName}
+          onCancel={() => {
+            closeFrameEditor();
+            clearPendingFrameQueue();
+          }}
+          onSave={(rect) => {
+            void handleSaveFrame(rect);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

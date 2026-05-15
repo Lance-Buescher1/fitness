@@ -2,11 +2,15 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PhotoRecord } from "@/lib/db/types";
-import { parsePhotoIsoDateFromFileName } from "@/lib/dates/parsePhotoFileName";
+import { photoDisplayLabel, photoSortKey } from "@/lib/photos/photoSortKey";
 
 type Props = {
   photos: PhotoRecord[];
   onClear: () => Promise<void>;
+  frameMsg?: string | null;
+  pendingFrameQueue?: PhotoRecord[];
+  onDismissFrameQueue?: () => void;
+  onRequestFrame?: (photo: PhotoRecord, options?: { applyToAllAfterSave?: boolean }) => void;
 };
 
 type ViewMode = "single" | "compare" | "strip";
@@ -15,7 +19,14 @@ function objectUrlKey(p: PhotoRecord): string {
   return p.id != null ? `id:${p.id}` : `fn:${p.fileName}:${p.takenAt}`;
 }
 
-export function PhotoTimeline({ photos, onClear }: Props) {
+export function PhotoTimeline({
+  photos,
+  onClear,
+  frameMsg,
+  pendingFrameQueue = [],
+  onDismissFrameQueue,
+  onRequestFrame,
+}: Props) {
   const [urls, setUrls] = useState<Map<string, string>>(new Map());
   const [dataUrlFallback, setDataUrlFallback] = useState<Map<string, string>>(new Map());
   const dataUrlAttempted = useRef(new Set<string>());
@@ -24,11 +35,14 @@ export function PhotoTimeline({ photos, onClear }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [referenceKey, setReferenceKey] = useState<string | null>(null);
   const [loadedKeys, setLoadedKeys] = useState<Set<string>>(() => new Set());
-
-  const sorted = useMemo(
-    () => [...photos].sort((a, b) => a.fileName.localeCompare(b.fileName)),
-    [photos],
-  );
+  const sorted = useMemo(() => {
+    return [...photos].sort((a, b) => {
+      const ka = photoSortKey(a);
+      const kb = photoSortKey(b);
+      if (ka !== kb) return ka.localeCompare(kb);
+      return a.fileName.localeCompare(b.fileName);
+    });
+  }, [photos]);
 
   const photoBlobFingerprint = useMemo(
     () => sorted.map((p) => `${objectUrlKey(p)}|${p.blob.size}|${p.takenAt}`).join("¦"),
@@ -151,8 +165,8 @@ export function PhotoTimeline({ photos, onClear }: Props) {
         <div>
           <h2 className="text-sm font-semibold text-zinc-100">Progress photos</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Stored in this browser only. Use <code className="text-zinc-400">IMG_YYYYMMDD.jpg</code>{" "}
-            names when possible.
+            Cache in this browser; framed copies save to <code className="text-zinc-400">PhotosFramed</code>{" "}
+            when GymData is connected. Use <strong>Load framed photos</strong> after clearing cache.
           </p>
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
@@ -162,7 +176,12 @@ export function PhotoTimeline({ photos, onClear }: Props) {
             className="rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-1.5 text-xs font-medium text-rose-200 hover:bg-rose-950/50 sm:self-start"
             onClick={() => {
               if (sorted.length === 0) return;
-              if (!window.confirm("Remove all photos from this device’s app cache?")) return;
+              if (
+                !window.confirm(
+                  "Remove all photos from this browser cache? Framed files in PhotosFramed are not deleted.",
+                )
+              )
+                return;
               void onClear();
             }}
           >
@@ -170,6 +189,33 @@ export function PhotoTimeline({ photos, onClear }: Props) {
           </button>
         </div>
       </div>
+
+      {frameMsg ? <p className="mb-2 text-xs text-amber-200/90">{frameMsg}</p> : null}
+
+      {pendingFrameQueue.length > 0 ? (
+        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-emerald-100/90">
+            {pendingFrameQueue.length} photo{pendingFrameQueue.length === 1 ? "" : "s"} ready to
+            frame (optional).
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="min-h-10 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500"
+              onClick={() => onRequestFrame?.(pendingFrameQueue[0])}
+            >
+              Frame now
+            </button>
+            <button
+              type="button"
+              className="min-h-10 rounded-lg border border-zinc-600 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800"
+              onClick={() => onDismissFrameQueue?.()}
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {sorted.length === 0 ? (
         <p className="text-sm text-zinc-500">No photos yet. Add images after each capture.</p>
@@ -247,6 +293,27 @@ export function PhotoTimeline({ photos, onClear }: Props) {
             />
           ) : null}
 
+          {activePhoto && viewMode === "single" ? (
+            <div className="flex flex-col items-center gap-2 px-0.5 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                className="min-h-11 w-full max-w-md rounded-lg border border-zinc-600 bg-zinc-800/80 px-3 py-2.5 text-xs font-medium text-zinc-100 hover:bg-zinc-800 sm:w-auto"
+                onClick={() => onRequestFrame?.(activePhoto)}
+              >
+                {activePhoto.isFramed ? "Re-frame photo" : "Frame photo"}
+              </button>
+              {!activePhoto.isFramed && sorted.length > 1 ? (
+                <button
+                  type="button"
+                  className="min-h-11 w-full max-w-md rounded-lg border border-emerald-800/80 bg-emerald-950/40 px-3 py-2.5 text-xs font-medium text-emerald-100 hover:bg-emerald-950/60 sm:w-auto"
+                  onClick={() => onRequestFrame?.(activePhoto, { applyToAllAfterSave: true })}
+                >
+                  Frame, then apply to all
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           <Filmstrip
             sorted={sorted}
             activeIndex={safeActiveIndex}
@@ -281,7 +348,7 @@ function HeroBlock({
 }) {
   const key = objectUrlKey(photo);
   const src = resolveSrc(key);
-  const label = parsePhotoIsoDateFromFileName(photo.fileName) ?? photo.fileName;
+  const label = photoDisplayLabel(photo);
   const ready = loadedKeys.has(key);
   const isCompare = variant === "compare";
 
@@ -458,7 +525,7 @@ function StripView({
         {sorted.map((p) => {
           const key = objectUrlKey(p);
           const src = resolveSrc(key);
-          const label = parsePhotoIsoDateFromFileName(p.fileName) ?? p.fileName;
+          const label = photoDisplayLabel(p);
           const ready = loadedKeys.has(key);
           return (
             <li

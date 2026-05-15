@@ -7,8 +7,8 @@ import {
   replaceFitnessRows,
   upsertFitnessDayMerge,
 } from "@/lib/db/fitnessDb";
+import { mergeFitnessSources } from "@/lib/fitness/mergeFitnessSources";
 import { mergeHealthStatsCsvWithExisting } from "@/lib/fitness/mergeHealthStatsWithExisting";
-import { mergeManualCsvWithExistingLedger } from "@/lib/fitness/mergeManualWithExisting";
 import { parseFitnessCsv } from "@/lib/fitness/parseCsv";
 import { parseManualFitnessCsv } from "@/lib/fitness/parseManualFitnessCsv";
 import { resolveFitnessCsvImport } from "@/lib/fitness/resolveFitnessCsvImport";
@@ -105,9 +105,8 @@ export function useFitnessRows() {
         }
         return commitImportedRows(strict, previousCount);
       }
-      const existing = await listFitnessRows();
-      const merged = mergeManualCsvWithExistingLedger(manual.byDate, existing);
-      return commitImportedRows(merged, previousCount);
+      const replaced = mergeFitnessSources(manual.byDate, new Map());
+      return commitImportedRows(replaced, previousCount);
     },
     [commitImportedRows],
   );
@@ -126,12 +125,15 @@ export function useFitnessRows() {
     const data = await listFitnessRows();
     const csv = serializeManualFitnessCsv(data);
     const w = await writeFitnessCsvToGymFolder(csv);
-    if (!w.ok && w.reason === "write_failed") {
-      setError(
-        `Saved locally but could not write fitness.csv to your GymData folder${
-          w.detail ? `: ${w.detail}` : ""
-        }. Try reconnecting the folder (read/write permission).`,
-      );
+    if (!w.ok && w.reason !== "no_folder") {
+      const detail = w.detail ? `: ${w.detail}` : "";
+      if (w.reason === "empty") {
+        setError(`Saved locally but could not sync fitness.csv${detail}`);
+      } else {
+        setError(
+          `Saved locally but could not write fitness.csv to your GymData folder${detail}. Local data is unchanged on disk. Try reconnecting the folder (read/write permission).`,
+        );
+      }
     }
   }, []);
 
@@ -175,7 +177,13 @@ export function useFitnessRows() {
 
   const exportFitnessCsvFile = useCallback(async (): Promise<ExportFitnessCsvResult> => {
     const data = await listFitnessRows();
-    return exportFitnessCsv(data);
+    const result = await exportFitnessCsv(data);
+    if (!result.ok && result.reason === "empty") {
+      setError(result.detail ?? "No fitness data to export.");
+    } else if (!result.ok && result.reason === "failed") {
+      setError(result.detail ?? "Export failed.");
+    }
+    return result;
   }, []);
 
   return {

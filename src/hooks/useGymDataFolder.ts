@@ -6,7 +6,12 @@ import {
   loadGymDataDirectoryHandle,
   saveGymDataDirectoryHandle,
 } from "@/lib/db/fitnessDb";
-import { openCsvPickStartedInDirectory, openImagePickStartedInDirectory } from "@/lib/files/openFromGymFolder";
+import {
+  openCsvPickStartedInDirectory,
+  openFramedImagePickStartedInDirectory,
+  openImagePickStartedInDirectory,
+  openPhotosPickStartedInDirectory,
+} from "@/lib/files/openFromGymFolder";
 
 export function useGymDataFolder() {
   const [folderConnected, setFolderConnected] = useState(false);
@@ -55,7 +60,15 @@ export function useGymDataFolder() {
   const pickImagesFromConnectedFolder = useCallback(async (): Promise<File[] | null> => {
     const dir = await loadGymDataDirectoryHandle();
     if (!dir) return null;
+    const fromPhotos = await openPhotosPickStartedInDirectory(dir);
+    if (fromPhotos?.length) return fromPhotos;
     return openImagePickStartedInDirectory(dir);
+  }, []);
+
+  const pickFramedImagesFromConnectedFolder = useCallback(async (): Promise<File[] | null> => {
+    const dir = await loadGymDataDirectoryHandle();
+    if (!dir) return null;
+    return openFramedImagePickStartedInDirectory(dir);
   }, []);
 
   return {
@@ -65,5 +78,6 @@ export function useGymDataFolder() {
     disconnectGymDataFolder,
     pickCsvFromConnectedFolder,
     pickImagesFromConnectedFolder,
+    pickFramedImagesFromConnectedFolder,
   };
 }

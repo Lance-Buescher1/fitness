@@ -1,8 +1,9 @@
 import Dexie, { type Table } from "dexie";
 import type { FitnessDay } from "@/lib/fitness/types";
 import type { FitnessRowRecord, PhotoRecord } from "@/lib/db/types";
-import { parsePhotoIsoDateFromFileName } from "@/lib/dates/parsePhotoFileName";
 import { blobTypeForImageFile, guessImageMimeFromFileName } from "@/lib/files/imageMime";
+import { readPhotoTakenAt } from "@/lib/photos/readPhotoTakenAt";
+import { photoSortKey } from "@/lib/photos/photoSortKey";
 
 export const GYM_DATA_DIR_META_KEY = "gymDataDirectory";
 
@@ -27,10 +28,17 @@ class FitnessDexie extends Dexie {
       photos: "++id, &fileName, takenAt",
       appMeta: "key",
     });
+    this.version(3).stores({
+      fitnessRows: "date",
+      photos: "++id, &fileName, takenAt, isFramed",
+      appMeta: "key",
+    });
   }
 }
 
 export const db = new FitnessDexie();
+
+export { photoSortKey };
 
 export async function replaceFitnessRows(rows: FitnessDay[]): Promise<void> {
   await db.transaction("rw", db.fitnessRows, async () => {
@@ -68,16 +76,6 @@ export async function upsertFitnessDayMerge(
   return next;
 }
 
-function sortKeyForPhoto(p: PhotoRecord): string {
-  const fromName = parsePhotoIsoDateFromFileName(p.fileName);
-  if (fromName) return fromName;
-  const d = new Date(p.takenAt);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 /**
  * WebKit often hands back Blobs from IndexedDB that do not paint reliably with
  * `URL.createObjectURL` until copied into a fresh Blob with an explicit MIME type.
@@ -96,27 +94,67 @@ async function materializeStoredPhotoBlob(row: PhotoRecord): Promise<PhotoRecord
 export async function listPhotos(): Promise<PhotoRecord[]> {
   const items = await db.photos.toArray();
   const materialized = await Promise.all(items.map((row) => materializeStoredPhotoBlob(row)));
-  return materialized.sort((a, b) => sortKeyForPhoto(a).localeCompare(sortKeyForPhoto(b)));
+  return materialized.sort((a, b) => {
+    const ka = photoSortKey(a);
+    const kb = photoSortKey(b);
+    if (ka !== kb) return ka.localeCompare(kb);
+    return a.fileName.localeCompare(b.fileName);
+  });
 }
 
-export async function addPhotosFromFiles(files: File[]): Promise<void> {
+export type AddPhotosOptions = {
+  isFramed?: boolean;
+};
+
+export async function addPhotosFromFiles(
+  files: File[],
+  options: AddPhotosOptions = {},
+): Promise<void> {
+  const isFramed = options.isFramed ?? false;
   const prepared = await Promise.all(
     files.map(async (file) => {
       const buf = await file.arrayBuffer();
       const blob = new Blob([buf], { type: blobTypeForImageFile(file) });
-      return { fileName: file.name, takenAt: file.lastModified, blob };
+      const takenAt = await readPhotoTakenAt(file);
+      const framedFileName = isFramed
+        ? file.name.replace(/\.[^.]+$/i, "") + ".jpg"
+        : undefined;
+      return {
+        fileName: file.name,
+        takenAt,
+        blob,
+        isFramed,
+        framedFileName,
+      };
     }),
   );
   await db.transaction("rw", db.photos, async () => {
-    for (const { fileName, takenAt, blob } of prepared) {
+    for (const { fileName, takenAt, blob, isFramed: framed, framedFileName } of prepared) {
       const existing = await db.photos.where("fileName").equals(fileName).first();
       if (existing?.id != null) {
-        await db.photos.update(existing.id, { blob, takenAt });
+        await db.photos.update(existing.id, { blob, takenAt, isFramed: framed, framedFileName });
       } else {
-        await db.photos.add({ fileName, takenAt, blob });
+        await db.photos.add({
+          fileName,
+          takenAt,
+          blob,
+          isFramed: framed,
+          framedFileName,
+        });
       }
     }
   });
+}
+
+export async function updatePhotoBlob(
+  id: number,
+  blob: Blob,
+  opts?: { isFramed?: boolean; framedFileName?: string },
+): Promise<void> {
+  const patch: Partial<PhotoRecord> = { blob };
+  if (opts?.isFramed !== undefined) patch.isFramed = opts.isFramed;
+  if (opts?.framedFileName !== undefined) patch.framedFileName = opts.framedFileName;
+  await db.photos.update(id, patch);
 }
 
 export async function clearPhotos(): Promise<void> {

@@ -1,12 +1,26 @@
 import { serializeManualFitnessCsv } from "@/lib/fitness/serializeManualFitnessCsv";
 import type { FitnessDay } from "@/lib/fitness/types";
+import { writeFitnessCsvToGymFolder } from "@/lib/files/writeFitnessCsvToGymFolder";
 
 export type ExportFitnessCsvResult =
-  | { ok: true; method: "share" | "download" }
-  | { ok: false; reason: "cancelled" | "failed"; detail?: string };
+  | { ok: true; method: "folder" | "share" | "download" }
+  | { ok: false; reason: "cancelled" | "empty" | "failed"; detail?: string };
 
 export async function exportFitnessCsv(rows: FitnessDay[]): Promise<ExportFitnessCsvResult> {
+  if (rows.length === 0) {
+    return { ok: false, reason: "empty", detail: "No fitness data to export." };
+  }
+
   const csv = serializeManualFitnessCsv(rows);
+
+  const folderWrite = await writeFitnessCsvToGymFolder(csv);
+  if (folderWrite.ok) {
+    return { ok: true, method: "folder" };
+  }
+  if (folderWrite.reason === "empty") {
+    return { ok: false, reason: "empty", detail: folderWrite.detail };
+  }
+
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const file = new File([blob], "fitness.csv", { type: "text/csv" });
 

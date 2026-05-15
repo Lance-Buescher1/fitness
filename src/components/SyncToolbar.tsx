@@ -9,6 +9,13 @@ type GymFolderControls = {
   disconnectGymDataFolder: () => Promise<void>;
   pickCsvFromConnectedFolder: () => Promise<File | null>;
   pickImagesFromConnectedFolder: () => Promise<File[] | null>;
+  pickFramedImagesFromConnectedFolder: () => Promise<File[] | null>;
+};
+
+type ExportResult = {
+  ok: boolean;
+  method?: "folder" | "share" | "download";
+  detail?: string;
 };
 
 type Props = {
@@ -16,8 +23,9 @@ type Props = {
   onImportCsvBundle: (files: File[], previousCount: number) => Promise<boolean>;
   onImportFitnessCsv: (file: File, previousCount: number) => Promise<boolean>;
   onImportHealthStatsCsv: (file: File, previousCount: number) => Promise<boolean>;
-  onAddPhotos: (files: File[]) => Promise<void>;
-  onExportFitnessCsv: () => Promise<{ ok: boolean }>;
+  onAddPhotos: (files: File[], options?: { isFramed?: boolean }) => Promise<void>;
+  onLoadFramedPhotos: (files: File[]) => Promise<void>;
+  onExportFitnessCsv: () => Promise<ExportResult>;
   rowCount: number;
   message?: string | null;
   onDismissMessage?: () => void;
@@ -29,6 +37,7 @@ export function SyncToolbar({
   onImportFitnessCsv,
   onImportHealthStatsCsv,
   onAddPhotos,
+  onLoadFramedPhotos,
   onExportFitnessCsv,
   rowCount,
   message,
@@ -38,6 +47,7 @@ export function SyncToolbar({
   const fitnessCsvRef = useRef<HTMLInputElement>(null);
   const healthCsvRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const framedPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const fsPickSupported = useFileSystemAccessSupport();
   const [exportMsg, setExportMsg] = useState<string | null>(null);
@@ -49,6 +59,7 @@ export function SyncToolbar({
     disconnectGymDataFolder,
     pickCsvFromConnectedFolder,
     pickImagesFromConnectedFolder,
+    pickFramedImagesFromConnectedFolder,
   } = gymFolder;
 
   const runFitnessImport = async (file: File | null | undefined) => {
@@ -67,7 +78,19 @@ export function SyncToolbar({
     try {
       const result = await onExportFitnessCsv();
       if (result.ok) {
-        setExportMsg(`Exported fitness.csv at ${new Date().toLocaleTimeString()}.`);
+        if (result.method === "folder") {
+          setExportMsg(
+            `Updated fitness.csv in your GymData folder at ${new Date().toLocaleTimeString()}.`,
+          );
+        } else if (result.method === "share") {
+          setExportMsg(
+            `Shared fitness.csv at ${new Date().toLocaleTimeString()}. Data in this browser is unchanged. iOS may save a duplicate name in Files; connect GymData on desktop to overwrite in place.`,
+          );
+        } else {
+          setExportMsg(`Downloaded fitness.csv at ${new Date().toLocaleTimeString()}.`);
+        }
+      } else if (result.detail) {
+        setExportMsg(result.detail);
       }
     } catch (e) {
       setExportMsg(e instanceof Error ? e.message : "Export failed");
@@ -82,9 +105,10 @@ export function SyncToolbar({
         <div>
           <h2 className="text-sm font-semibold text-zinc-100">Data sync</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Import <code className="text-zinc-400">fitness.csv</code> and{" "}
-            <code className="text-zinc-400">health_stats.csv</code> separately (merged into this
-            browser), or both at once. On desktop Chromium you can connect a <strong>GymData</strong>{" "}
+            <strong>Import fitness.csv</strong> replaces all local rows from that file.{" "}
+            <strong>Import health_stats.csv</strong> updates calories only (keeps weight and workouts).{" "}
+            Or replace everything with both CSVs at once. On desktop Chromium you can connect a{" "}
+            <strong>GymData</strong>{" "}
             folder once for read/write imports and automatic <code className="text-zinc-400">fitness.csv</code>{" "}
             updates after logging.
           </p>
@@ -119,18 +143,22 @@ export function SyncToolbar({
               </p>
               <ul className="mt-2 list-inside list-disc space-y-0.5 text-amber-100/75">
                 <li>
-                  <strong>Import fitness.csv</strong> — manual logs and weight
+                  <strong>Import fitness.csv</strong> — replaces local rows from the file
                 </li>
                 <li>
-                  <strong>Import health_stats.csv</strong> — calories from your fitness app
+                  <strong>Import health_stats.csv</strong> — updates calories only
                 </li>
                 <li>
-                  <strong>Add photos</strong> — progress pictures
+                  <strong>Add photos</strong> — originals; frame in the timeline
+                </li>
+                <li>
+                  <strong>Load framed photos</strong> — from PhotosFramed after clearing cache
                 </li>
               </ul>
               <p className="mt-2 text-amber-100/70">
-                After logging, tap <strong>Export fitness.csv</strong> to save an updated file to
-                Files (Share → Save to Files).
+                After logging, tap <strong>Export fitness.csv</strong>. Your data stays in this
+                browser; Share may save as <code className="text-amber-200/90">fitness (1).csv</code>.
+                Use desktop <strong>Connect GymData folder</strong> to update the real file in place.
               </p>
             </div>
           )}
@@ -263,6 +291,40 @@ export function SyncToolbar({
             }}
           >
             Add photos
+          </button>
+
+          <input
+            ref={framedPhotoInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={async (e) => {
+              const picked = e.target.files ? Array.from(e.target.files) : [];
+              e.target.value = "";
+              if (picked.length === 0) return;
+              await onLoadFramedPhotos(picked);
+            }}
+          />
+          <button
+            type="button"
+            className="min-h-11 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm font-medium text-zinc-100 hover:bg-zinc-800"
+            onClick={async () => {
+              if (folderConnected) {
+                try {
+                  const picked = await pickFramedImagesFromConnectedFolder();
+                  if (picked?.length) {
+                    await onLoadFramedPhotos(picked);
+                    return;
+                  }
+                } catch {
+                  /* permission / API — fall back to native picker */
+                }
+              }
+              framedPhotoInputRef.current?.click();
+            }}
+          >
+            Load framed photos
           </button>
         </div>
 
