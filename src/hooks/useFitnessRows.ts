@@ -13,6 +13,10 @@ import { parseFitnessCsv } from "@/lib/fitness/parseCsv";
 import { parseManualFitnessCsv } from "@/lib/fitness/parseManualFitnessCsv";
 import { resolveFitnessCsvImport } from "@/lib/fitness/resolveFitnessCsvImport";
 import { serializeManualFitnessCsv } from "@/lib/fitness/serializeManualFitnessCsv";
+import {
+  exportFitnessCsv,
+  type ExportFitnessCsvResult,
+} from "@/lib/files/exportFitnessCsv";
 import { writeFitnessCsvToGymFolder } from "@/lib/files/writeFitnessCsvToGymFolder";
 
 export function useFitnessRows() {
@@ -169,6 +173,11 @@ export function useFitnessRows() {
     [reloadRowsQuiet, syncFitnessCsvToGymFolder],
   );
 
+  const exportFitnessCsvFile = useCallback(async (): Promise<ExportFitnessCsvResult> => {
+    const data = await listFitnessRows();
+    return exportFitnessCsv(data);
+  }, []);
+
   return {
     rows,
     loading,
@@ -181,5 +190,6 @@ export function useFitnessRows() {
     logWorkout,
     logRestDay,
     logWeight,
+    exportFitnessCsvFile,
   };
 }

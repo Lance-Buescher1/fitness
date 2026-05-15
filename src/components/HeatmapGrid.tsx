@@ -1,16 +1,20 @@
 "use client";
 
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FitnessDay } from "@/lib/fitness/types";
 import {
   buildHeatmapWeekColumns,
   formatHeatmapPanelLabel,
+  HEATMAP_RECENT_WEEKS,
   HEATMAP_TOTAL_WEEKS,
   HEATMAP_WEEKS_PER_PANEL,
+  padFinalPanelWeeks,
   panelizeWeekColumns,
 } from "@/lib/heatmap/buildCells";
-import type { HeatmapMetric } from "@/lib/heatmap/types";
+import type { HeatmapCell, HeatmapMetric } from "@/lib/heatmap/types";
 import { HeatmapLegend } from "@/components/HeatmapLegend";
+
+type RangeMode = "recent" | "full";
 
 type Props = {
   rows: FitnessDay[];
@@ -19,21 +23,35 @@ type Props = {
 };
 
 export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
+  const [rangeMode, setRangeMode] = useState<RangeMode>("recent");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   const rowsByDate = useMemo(() => {
     const m = new Map<string, FitnessDay>();
     for (const r of rows) m.set(r.date, r);
     return m;
   }, [rows]);
 
-  const weekColumns = useMemo(
-    () => buildHeatmapWeekColumns(new Date(), rowsByDate, metric),
-    [rowsByDate, metric],
-  );
+  const weekColumns = useMemo(() => {
+    const all = buildHeatmapWeekColumns(new Date(), rowsByDate, metric);
+    if (rangeMode === "full") return all;
+    return all.slice(-HEATMAP_RECENT_WEEKS);
+  }, [rowsByDate, metric, rangeMode]);
 
   const panels = useMemo(
-    () => panelizeWeekColumns(weekColumns, HEATMAP_WEEKS_PER_PANEL),
+    () =>
+      padFinalPanelWeeks(
+        panelizeWeekColumns(weekColumns, HEATMAP_WEEKS_PER_PANEL),
+        HEATMAP_WEEKS_PER_PANEL,
+      ),
     [weekColumns],
   );
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollLeft = el.scrollWidth - el.clientWidth;
+  }, [metric, rangeMode, panels]);
 
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
@@ -43,14 +61,30 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
           <div className="flex rounded-lg border border-zinc-800 p-0.5 text-xs">
             <button
               type="button"
-              className={`rounded-md px-2 py-1 ${metric === "calories" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
+              className={`min-h-11 rounded-md px-2.5 py-1.5 ${rangeMode === "recent" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
+              onClick={() => setRangeMode("recent")}
+            >
+              Last 12 weeks
+            </button>
+            <button
+              type="button"
+              className={`min-h-11 rounded-md px-2.5 py-1.5 ${rangeMode === "full" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
+              onClick={() => setRangeMode("full")}
+            >
+              Full history
+            </button>
+          </div>
+          <div className="flex rounded-lg border border-zinc-800 p-0.5 text-xs">
+            <button
+              type="button"
+              className={`min-h-11 rounded-md px-2.5 py-1.5 ${metric === "calories" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
               onClick={() => onMetricChange("calories")}
             >
               Calories
             </button>
             <button
               type="button"
-              className={`rounded-md px-2 py-1 ${metric === "workout" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
+              className={`min-h-11 rounded-md px-2.5 py-1.5 ${metric === "workout" ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
               onClick={() => onMetricChange("workout")}
             >
               Workout
@@ -61,21 +95,23 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
       </div>
 
       <div
+        ref={scrollRef}
         className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2"
         role="region"
         aria-label="Activity heatmap, scroll horizontally; each strip is consecutive weeks with no gaps"
       >
         {panels.map((panelWeeks, panelIdx) => {
           const nWeeks = panelWeeks.length;
+          const realWeeks = panelWeeks.filter((w) => !w[0]?.isPlaceholder);
           const flat = panelWeeks.flatMap((w) => w);
-          const startIso = panelWeeks[0]?.[0]?.isoDate ?? "";
-          const lastWeek = panelWeeks[panelWeeks.length - 1];
+          const startIso = realWeeks[0]?.[0]?.isoDate ?? "";
+          const lastWeek = realWeeks[realWeeks.length - 1];
           const endIso = lastWeek?.[lastWeek.length - 1]?.isoDate ?? "";
           const label = formatHeatmapPanelLabel(startIso, endIso);
 
           return (
             <div
-              key={`${metric}-${panelIdx}-${startIso}`}
+              key={`${metric}-${rangeMode}-${panelIdx}-${startIso}`}
               className="flex w-[min(92vw,360px)] shrink-0 snap-start flex-col gap-1.5 sm:w-[min(85vw,400px)]"
             >
               <p className="text-center text-[11px] font-medium text-zinc-500">{label}</p>
@@ -91,23 +127,8 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
                 role="img"
                 aria-label={`Activity heatmap ${label}`}
               >
-                {flat.map((c) => (
-                  <div
-                    key={c.isoDate}
-                    title={
-                      metric === "workout"
-                        ? `${c.isoDate}${
-                            c.workoutCompleted == null
-                              ? " · workout not logged"
-                              : c.workoutCompleted
-                                ? " · workout day"
-                                : " · rest day"
-                          }`
-                        : `${c.isoDate}${c.caloriesBurned != null ? ` · ${c.caloriesBurned} kcal` : " · calories not logged"}`
-                    }
-                    className="min-h-[14px] rounded-sm ring-1 ring-zinc-800/80"
-                    style={{ backgroundColor: cellColor(c.intensity, metric, c.caloriesBurned) }}
-                  />
+                {flat.map((c, i) => (
+                  <HeatmapDayCell key={c.isPlaceholder ? `pad-${panelIdx}-${i}` : c.isoDate} cell={c} metric={metric} />
                 ))}
               </div>
             </div>
@@ -115,10 +136,48 @@ export function HeatmapGrid({ rows, metric, onMetricChange }: Props) {
         })}
       </div>
       <p className="mt-2 text-xs text-zinc-500">
-        About {Math.round(HEATMAP_TOTAL_WEEKS / 52)} years of contiguous days ({HEATMAP_TOTAL_WEEKS}{" "}
-        weeks), shown in ~{HEATMAP_WEEKS_PER_PANEL}-week strips—swipe for older months · local data only
+        {rangeMode === "recent" ? (
+          <>
+            Last {HEATMAP_RECENT_WEEKS} weeks · switch to full history for about{" "}
+            {Math.round(HEATMAP_TOTAL_WEEKS / 52)} years ({HEATMAP_TOTAL_WEEKS} weeks)
+          </>
+        ) : (
+          <>
+            About {Math.round(HEATMAP_TOTAL_WEEKS / 52)} years of contiguous days ({HEATMAP_TOTAL_WEEKS}{" "}
+            weeks), shown in ~{HEATMAP_WEEKS_PER_PANEL}-week strips—swipe for older months · local data only
+          </>
+        )}
       </p>
     </section>
+  );
+}
+
+function HeatmapDayCell({ cell, metric }: { cell: HeatmapCell; metric: HeatmapMetric }) {
+  if (cell.isPlaceholder) {
+    return (
+      <div
+        aria-hidden
+        className="min-h-[14px] rounded-sm bg-transparent ring-0"
+      />
+    );
+  }
+
+  return (
+    <div
+      title={
+        metric === "workout"
+          ? `${cell.isoDate}${
+              cell.workoutCompleted == null
+                ? " · workout not logged"
+                : cell.workoutCompleted
+                  ? " · workout day"
+                  : " · rest day"
+            }`
+          : `${cell.isoDate}${cell.caloriesBurned != null ? ` · ${cell.caloriesBurned} kcal` : " · calories not logged"}`
+      }
+      className="min-h-[14px] rounded-sm ring-1 ring-zinc-800/80"
+      style={{ backgroundColor: cellColor(cell.intensity, metric, cell.caloriesBurned) }}
+    />
   );
 }
 

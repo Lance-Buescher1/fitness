@@ -6,6 +6,7 @@ import {
   formatHeatmapPanelLabel,
   HEATMAP_TOTAL_WEEKS,
   HEATMAP_WEEKS_PER_PANEL,
+  padFinalPanelWeeks,
   panelizeWeekColumns,
 } from "@/lib/heatmap/buildCells";
 import type { FitnessDay } from "@/lib/fitness/types";
@@ -34,6 +35,23 @@ describe("panelizeWeekColumns", () => {
 
   it("throws for invalid weeksPerPanel", () => {
     expect(() => panelizeWeekColumns([], 0)).toThrow();
+  });
+});
+
+describe("padFinalPanelWeeks", () => {
+  it("pads the last panel to weeksPerPanel width", () => {
+    const cols = buildHeatmapWeekColumns(new Date("2026-05-11T12:00:00"), emptyMap(), "calories");
+    const panels = padFinalPanelWeeks(
+      panelizeWeekColumns(cols, HEATMAP_WEEKS_PER_PANEL),
+      HEATMAP_WEEKS_PER_PANEL,
+    );
+    const last = panels[panels.length - 1];
+    expect(last.length).toBe(HEATMAP_WEEKS_PER_PANEL);
+    const remainder = HEATMAP_TOTAL_WEEKS % HEATMAP_WEEKS_PER_PANEL;
+    const paddedCount = remainder === 0 ? 0 : HEATMAP_WEEKS_PER_PANEL - remainder;
+    if (paddedCount > 0) {
+      expect(last[last.length - 1][0].isPlaceholder).toBe(true);
+    }
   });
 });
 

@@ -5,4 +5,6 @@ export type HeatmapCell = {
   caloriesBurned: number | null;
   workoutCompleted: boolean | null;
   intensity: number;
+  /** Padding week outside the real date range (uniform panel width). */
+  isPlaceholder?: boolean;
 };
