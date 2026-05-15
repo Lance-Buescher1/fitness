@@ -7,11 +7,25 @@ import type { HeatmapCell, HeatmapMetric } from "@/lib/heatmap/types";
 
 /** Full scroll range: contiguous weeks (no gaps). ~2y so every month in the last year+ is reachable. */
 export const HEATMAP_TOTAL_WEEKS = 104;
+
+/** Compact heatmap range (~3 months). */
+export const HEATMAP_RECENT_WEEKS = 12;
+
 const DOW = 7;
 const TOTAL = HEATMAP_TOTAL_WEEKS * DOW;
 
 /** ~2 months per scroll panel (tunable). */
 export const HEATMAP_WEEKS_PER_PANEL = 9;
+
+function placeholderWeekColumn(): HeatmapCell[] {
+  return Array.from({ length: DOW }, () => ({
+    isoDate: "",
+    caloriesBurned: null,
+    workoutCompleted: null,
+    intensity: 0,
+    isPlaceholder: true,
+  }));
+}
 
 /** Column-major flat order matches `grid-auto-flow: column` (week columns, Sun→Sat). */
 export function buildHeatmapCells(
@@ -66,6 +80,21 @@ export function panelizeWeekColumns(
     panels.push(columns.slice(i, i + weeksPerPanel));
   }
   return panels;
+}
+
+/** Pad the final panel to a full strip width so every panel shares the same aspect ratio. */
+export function padFinalPanelWeeks(
+  panels: HeatmapCell[][][],
+  weeksPerPanel: number,
+): HeatmapCell[][][] {
+  if (panels.length === 0) return panels;
+  const last = panels[panels.length - 1];
+  const deficit = weeksPerPanel - last.length;
+  if (deficit <= 0) return panels;
+  return [
+    ...panels.slice(0, -1),
+    [...last, ...Array.from({ length: deficit }, () => placeholderWeekColumn())],
+  ];
 }
 
 function parseIsoLocal(iso: string): Date {

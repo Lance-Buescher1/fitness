@@ -8,6 +8,7 @@ import { PhotoTimeline } from "@/components/PhotoTimeline";
 import { ShortcutButtons } from "@/components/ShortcutButtons";
 import { SyncToolbar } from "@/components/SyncToolbar";
 import { WeightCaloriesChart } from "@/components/WeightCaloriesChart";
+import { useFileSystemAccessSupport } from "@/hooks/useFileSystemAccessSupport";
 import { useFitnessRows } from "@/hooks/useFitnessRows";
 import { useGymDataFolder } from "@/hooks/useGymDataFolder";
 import { usePhotoGallery } from "@/hooks/usePhotoGallery";
@@ -24,7 +25,9 @@ export function Dashboard() {
     logWorkout,
     logRestDay,
     logWeight,
+    exportFitnessCsvFile,
   } = useFitnessRows();
+  const fsPickSupported = useFileSystemAccessSupport();
   const {
     photos,
     error: photoError,
@@ -60,6 +63,11 @@ export function Dashboard() {
 
       <DailyLogPanel
         folderConnected={gymFolder.folderConnected}
+        fsPickSupported={fsPickSupported}
+        onExportFitnessCsv={async () => {
+          const result = await exportFitnessCsvFile();
+          return { ok: result.ok };
+        }}
         onLogWorkout={logWorkout}
         onLogRestDay={logRestDay}
         onLogWeight={logWeight}
@@ -77,6 +85,10 @@ export function Dashboard() {
         onImportFitnessCsv={(file, prev) => importFitnessCsvFile(file, prev)}
         onImportHealthStatsCsv={(file, prev) => importHealthStatsCsvFile(file, prev)}
         onAddPhotos={(files) => addFromFiles(files)}
+        onExportFitnessCsv={async () => {
+          const result = await exportFitnessCsvFile();
+          return { ok: result.ok };
+        }}
       />
 
       <HeatmapGrid rows={rows} metric={metric} onMetricChange={setMetric} />

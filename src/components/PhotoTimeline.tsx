@@ -136,7 +136,7 @@ export function PhotoTimeline({ photos, onClear }: Props) {
         <button
           key={id}
           type="button"
-          className={`rounded-md px-2 py-1 ${viewMode === id ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
+          className={`min-h-11 rounded-md px-2.5 py-1.5 ${viewMode === id ? "bg-zinc-800 text-zinc-50" : "text-zinc-400"}`}
           onClick={() => setViewMode(id)}
         >
           {label}
@@ -189,13 +189,14 @@ export function PhotoTimeline({ photos, onClear }: Props) {
 
           {viewMode === "compare" && latestPhoto ? (
             <div className="flex min-h-0 flex-col gap-3">
-              <div className="grid min-h-0 grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid min-h-0 grid-cols-2 gap-2">
                 <div className="flex min-h-0 flex-col gap-1">
                   <p className="text-center text-[11px] font-medium uppercase tracking-wide text-zinc-500">
                     Reference
                   </p>
                   {referencePhoto ? (
                     <HeroBlock
+                      variant="compare"
                       photo={referencePhoto}
                       resolveSrc={resolveSrc}
                       loadedKeys={loadedKeys}
@@ -203,8 +204,8 @@ export function PhotoTimeline({ photos, onClear }: Props) {
                       onImgError={handleImgError}
                     />
                   ) : (
-                    <div className="flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 px-3 py-6 text-center">
-                      <p className="text-xs text-zinc-400">
+                    <div className="flex min-h-[10rem] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 px-2 py-4 text-center">
+                      <p className="text-[10px] leading-snug text-zinc-400">
                         Pick a photo in the strip, then tap <span className="text-zinc-200">Set reference</span>.
                       </p>
                     </div>
@@ -215,6 +216,7 @@ export function PhotoTimeline({ photos, onClear }: Props) {
                     Latest
                   </p>
                   <HeroBlock
+                    variant="compare"
                     photo={latestPhoto}
                     resolveSrc={resolveSrc}
                     loadedKeys={loadedKeys}
@@ -224,10 +226,10 @@ export function PhotoTimeline({ photos, onClear }: Props) {
                 </div>
               </div>
               {activePhoto ? (
-                <div className="flex justify-center">
+                <div className="flex justify-center px-0.5">
                   <button
                     type="button"
-                    className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+                    className="min-h-11 w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 sm:w-auto sm:py-1.5"
                     onClick={() => setReferenceKey(objectUrlKey(activePhoto))}
                   >
                     Set reference to current strip photo
@@ -263,12 +265,14 @@ export function PhotoTimeline({ photos, onClear }: Props) {
 }
 
 function HeroBlock({
+  variant = "default",
   photo,
   resolveSrc,
   loadedKeys,
   markLoaded,
   onImgError,
 }: {
+  variant?: "default" | "compare";
   photo: PhotoRecord;
   resolveSrc: (key: string) => string | null;
   loadedKeys: Set<string>;
@@ -279,11 +283,22 @@ function HeroBlock({
   const src = resolveSrc(key);
   const label = parsePhotoIsoDateFromFileName(photo.fileName) ?? photo.fileName;
   const ready = loadedKeys.has(key);
+  const isCompare = variant === "compare";
 
   return (
     <div className="flex min-h-0 flex-col gap-1">
-      <div className="relative w-full max-h-[min(72vh,36rem)] min-h-[12rem] overflow-y-auto overflow-x-hidden rounded-lg bg-zinc-900/60">
-        <div className="relative flex min-h-[12rem] w-full items-start justify-center p-2 sm:min-h-[14rem]">
+      <div
+        className={`relative w-full overflow-y-auto overflow-x-hidden rounded-lg bg-zinc-900/60 ${
+          isCompare
+            ? "max-h-[min(42vh,18rem)] min-h-[8rem]"
+            : "max-h-[min(72vh,36rem)] min-h-[12rem]"
+        }`}
+      >
+        <div
+          className={`relative flex w-full items-start justify-center ${
+            isCompare ? "min-h-[8rem] p-1" : "min-h-[12rem] p-2 sm:min-h-[14rem]"
+          }`}
+        >
           {src && !ready ? (
             <div
               className="absolute inset-0 animate-pulse bg-zinc-800"
@@ -295,7 +310,9 @@ function HeroBlock({
             <img
               src={src}
               alt=""
-              className={`h-auto max-h-[min(70vh,34rem)] w-auto max-w-full object-contain object-top ${ready ? "opacity-100" : "opacity-0"}`}
+              className={`h-auto w-auto max-w-full object-contain object-top ${
+                isCompare ? "max-h-[min(40vh,17rem)]" : "max-h-[min(70vh,34rem)]"
+              } ${ready ? "opacity-100" : "opacity-0"}`}
               onLoad={() => markLoaded(key)}
               onError={() => onImgError(key, photo.blob)}
             />
