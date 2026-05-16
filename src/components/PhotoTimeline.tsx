@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PhotoRecord } from "@/lib/db/types";
+import { materializePhotoBlob } from "@/lib/db/fitnessDb";
 import { photoDisplayLabel, photoSortKey } from "@/lib/photos/photoSortKey";
 
 type Props = {
@@ -35,6 +36,8 @@ export function PhotoTimeline({
   const [activeIndex, setActiveIndex] = useState(0);
   const [referenceKey, setReferenceKey] = useState<string | null>(null);
   const [loadedKeys, setLoadedKeys] = useState<Set<string>>(() => new Set());
+  const urlsRef = useRef<Map<string, string>>(new Map());
+  urlsRef.current = urls;
   const sorted = useMemo(() => {
     return [...photos].sort((a, b) => {
       const ka = photoSortKey(a);
@@ -49,20 +52,73 @@ export function PhotoTimeline({
     [sorted],
   );
 
-  /* eslint-disable react-hooks/set-state-in-effect -- object URL lifecycle tied to blob identity; cleanup revokes */
+  const safeActiveIndex = sorted.length === 0 ? 0 : Math.min(activeIndex, sorted.length - 1);
+
+  const urlWindowKey = useMemo(() => {
+    const indices = new Set<number>();
+    if (sorted.length === 0) return "";
+    if (viewMode === "strip") {
+      for (let i = 0; i < sorted.length; i++) indices.add(i);
+    } else {
+      for (let d = -2; d <= 2; d++) {
+        const i = safeActiveIndex + d;
+        if (i >= 0 && i < sorted.length) indices.add(i);
+      }
+      if (viewMode === "compare") {
+        indices.add(sorted.length - 1);
+        if (referenceKey) {
+          const ri = sorted.findIndex((p) => objectUrlKey(p) === referenceKey);
+          if (ri >= 0) indices.add(ri);
+        }
+      }
+    }
+    return [...indices]
+      .sort((a, b) => a - b)
+      .map((i) => objectUrlKey(sorted[i]))
+      .join(",");
+  }, [sorted, safeActiveIndex, viewMode, referenceKey]);
+
+  /* eslint-disable react-hooks/set-state-in-effect -- object URL lifecycle tied to visible window */
+  useLayoutEffect(() => {
+    if (!urlWindowKey) {
+      setUrls((prev) => {
+        for (const u of prev.values()) URL.revokeObjectURL(u);
+        return new Map();
+      });
+      return;
+    }
+    const windowKeys = new Set(urlWindowKey.split(",").filter(Boolean));
+    const keyToPhoto = new Map(sorted.map((p) => [objectUrlKey(p), p]));
+
+    setUrls((prev) => {
+      const next = new Map(prev);
+      for (const [key, url] of prev) {
+        if (!windowKeys.has(key)) {
+          URL.revokeObjectURL(url);
+          next.delete(key);
+        }
+      }
+      for (const key of windowKeys) {
+        if (next.has(key)) continue;
+        const photo = keyToPhoto.get(key);
+        if (!photo) continue;
+        next.set(key, URL.createObjectURL(photo.blob));
+      }
+      return next;
+    });
+  }, [photoBlobFingerprint, sorted, urlWindowKey]);
+
   useLayoutEffect(() => {
     dataUrlAttempted.current.clear();
     setDataUrlFallback(new Map());
     setLoadedKeys(new Set());
-    const next = new Map<string, string>();
-    for (const p of sorted) {
-      next.set(objectUrlKey(p), URL.createObjectURL(p.blob));
-    }
-    setUrls(next);
+  }, [photoBlobFingerprint]);
+
+  useEffect(() => {
     return () => {
-      for (const u of next.values()) URL.revokeObjectURL(u);
+      for (const u of urlsRef.current.values()) URL.revokeObjectURL(u);
     };
-  }, [photoBlobFingerprint, sorted]);
+  }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
@@ -86,8 +142,6 @@ export function PhotoTimeline({
     [dataUrlFallback, urls],
   );
 
-  const safeActiveIndex = sorted.length === 0 ? 0 : Math.min(activeIndex, sorted.length - 1);
-
   const blobToDataUrl = (blob: Blob) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -96,24 +150,22 @@ export function PhotoTimeline({
       reader.readAsDataURL(blob);
     });
 
-  const handleImgError = useCallback(
-    (key: string, blob: Blob) => {
-      if (dataUrlAttempted.current.has(key)) return;
-      dataUrlAttempted.current.add(key);
-      void (async () => {
-        try {
-          const dataUrl = await blobToDataUrl(blob);
-          setDataUrlFallback((prev) => {
-            if (prev.has(key)) return prev;
-            return new Map(prev).set(key, dataUrl);
-          });
-        } catch {
-          dataUrlAttempted.current.delete(key);
-        }
-      })();
-    },
-    [],
-  );
+  const handleImgError = useCallback((key: string, photo: PhotoRecord) => {
+    if (dataUrlAttempted.current.has(key)) return;
+    dataUrlAttempted.current.add(key);
+    void (async () => {
+      try {
+        const blob = await materializePhotoBlob(photo);
+        const dataUrl = await blobToDataUrl(blob);
+        setDataUrlFallback((prev) => {
+          if (prev.has(key)) return prev;
+          return new Map(prev).set(key, dataUrl);
+        });
+      } catch {
+        dataUrlAttempted.current.delete(key);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (viewMode === "strip" || sorted.length === 0) return;
@@ -344,7 +396,7 @@ function HeroBlock({
   resolveSrc: (key: string) => string | null;
   loadedKeys: Set<string>;
   markLoaded: (key: string) => void;
-  onImgError: (key: string, blob: Blob) => void;
+  onImgError: (key: string, photo: PhotoRecord) => void;
 }) {
   const key = objectUrlKey(photo);
   const src = resolveSrc(key);
@@ -381,7 +433,7 @@ function HeroBlock({
                 isCompare ? "max-h-[min(40vh,17rem)]" : "max-h-[min(70vh,34rem)]"
               } ${ready ? "opacity-100" : "opacity-0"}`}
               onLoad={() => markLoaded(key)}
-              onError={() => onImgError(key, photo.blob)}
+              onError={() => onImgError(key, photo)}
             />
           ) : null}
         </div>
@@ -443,7 +495,7 @@ function Filmstrip({
   resolveSrc: (key: string) => string | null;
   loadedKeys: Set<string>;
   markLoaded: (key: string) => void;
-  onImgError: (key: string, blob: Blob) => void;
+  onImgError: (key: string, photo: PhotoRecord) => void;
   compareMode: boolean;
   referenceKey: string | null;
 }) {
@@ -494,7 +546,7 @@ function Filmstrip({
                     alt=""
                     className={`h-full w-full object-cover ${loadedKeys.has(key) ? "opacity-100" : "opacity-0"}`}
                     onLoad={() => markLoaded(key)}
-                    onError={() => onImgError(key, p.blob)}
+                    onError={() => onImgError(key, p)}
                   />
                 ) : null}
               </button>
@@ -517,7 +569,7 @@ function StripView({
   resolveSrc: (key: string) => string | null;
   loadedKeys: Set<string>;
   markLoaded: (key: string) => void;
-  onImgError: (key: string, blob: Blob) => void;
+  onImgError: (key: string, photo: PhotoRecord) => void;
 }) {
   return (
     <div className="w-full overflow-x-auto pb-2 [scrollbar-width:thin]">
@@ -543,7 +595,7 @@ function StripView({
                     alt=""
                     className={`h-full w-full object-cover ${ready ? "opacity-100" : "opacity-0"}`}
                     onLoad={() => markLoaded(key)}
-                    onError={() => onImgError(key, p.blob)}
+                    onError={() => onImgError(key, p)}
                   />
                 ) : null}
               </div>

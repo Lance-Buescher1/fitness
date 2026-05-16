@@ -26,6 +26,8 @@ type Props = {
   onAddPhotos: (files: File[], options?: { isFramed?: boolean }) => Promise<void>;
   onLoadFramedPhotos: (files: File[]) => Promise<void>;
   onExportFitnessCsv: () => Promise<ExportResult>;
+  onExportFramedPhotos: () => Promise<ExportResult>;
+  framedPhotoCount: number;
   rowCount: number;
   message?: string | null;
   onDismissMessage?: () => void;
@@ -39,6 +41,8 @@ export function SyncToolbar({
   onAddPhotos,
   onLoadFramedPhotos,
   onExportFitnessCsv,
+  onExportFramedPhotos,
+  framedPhotoCount,
   rowCount,
   message,
   onDismissMessage,
@@ -52,6 +56,8 @@ export function SyncToolbar({
   const fsPickSupported = useFileSystemAccessSupport();
   const [exportMsg, setExportMsg] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportingFramed, setExportingFramed] = useState(false);
+  const [exportFramedMsg, setExportFramedMsg] = useState<string | null>(null);
 
   const {
     folderConnected,
@@ -70,6 +76,23 @@ export function SyncToolbar({
   const runHealthImport = async (file: File | null | undefined) => {
     if (!file) return;
     await onImportHealthStatsCsv(file, rowCount);
+  };
+
+  const runExportFramed = async () => {
+    setExportingFramed(true);
+    setExportFramedMsg(null);
+    try {
+      const result = await onExportFramedPhotos();
+      if (result.ok && result.detail) {
+        setExportFramedMsg(result.detail);
+      } else if (!result.ok && result.detail) {
+        setExportFramedMsg(result.detail);
+      }
+    } catch (e) {
+      setExportFramedMsg(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExportingFramed(false);
+    }
   };
 
   const runExport = async () => {
@@ -153,6 +176,9 @@ export function SyncToolbar({
                 </li>
                 <li>
                   <strong>Load framed photos</strong> — from PhotosFramed after clearing cache
+                </li>
+                <li>
+                  <strong>Export framed photos</strong> — Share sheet → save to GymData/PhotosFramed
                 </li>
               </ul>
               <p className="mt-2 text-amber-100/70">
@@ -326,9 +352,19 @@ export function SyncToolbar({
           >
             Load framed photos
           </button>
+
+          <button
+            type="button"
+            disabled={exportingFramed || framedPhotoCount === 0}
+            className="min-h-11 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2.5 text-sm font-medium text-zinc-100 hover:bg-zinc-800 disabled:opacity-40"
+            onClick={() => void runExportFramed()}
+          >
+            {exportingFramed ? "Exporting…" : "Export framed photos"}
+          </button>
         </div>
 
         {exportMsg ? <p className="text-xs text-zinc-400">{exportMsg}</p> : null}
+        {exportFramedMsg ? <p className="text-xs text-zinc-400">{exportFramedMsg}</p> : null}
 
         {message ? (
           <div className="flex items-start justify-between gap-2 rounded-lg border border-rose-900/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-100">

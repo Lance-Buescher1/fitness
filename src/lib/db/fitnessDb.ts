@@ -3,6 +3,7 @@ import type { FitnessDay } from "@/lib/fitness/types";
 import type { FitnessRowRecord, PhotoRecord } from "@/lib/db/types";
 import { blobTypeForImageFile, guessImageMimeFromFileName } from "@/lib/files/imageMime";
 import { readPhotoTakenAt } from "@/lib/photos/readPhotoTakenAt";
+import { resizeImageBlobForCache } from "@/lib/photos/resizeImageBlobForCache";
 import { photoSortKey } from "@/lib/photos/photoSortKey";
 
 export const GYM_DATA_DIR_META_KEY = "gymDataDirectory";
@@ -80,7 +81,8 @@ export async function upsertFitnessDayMerge(
  * WebKit often hands back Blobs from IndexedDB that do not paint reliably with
  * `URL.createObjectURL` until copied into a fresh Blob with an explicit MIME type.
  */
-async function materializeStoredPhotoBlob(row: PhotoRecord): Promise<PhotoRecord> {
+/** WebKit: copy stored blob with explicit MIME so object URLs paint reliably. */
+export async function materializePhotoBlob(row: PhotoRecord): Promise<Blob> {
   const raw = row.blob;
   const source = raw instanceof Blob ? raw : new Blob([], { type: "application/octet-stream" });
   const buf = await source.arrayBuffer();
@@ -88,13 +90,12 @@ async function materializeStoredPhotoBlob(row: PhotoRecord): Promise<PhotoRecord
     source.type && source.type !== "application/octet-stream"
       ? source.type
       : guessImageMimeFromFileName(row.fileName);
-  return { ...row, blob: new Blob([buf], { type }) };
+  return new Blob([buf], { type });
 }
 
 export async function listPhotos(): Promise<PhotoRecord[]> {
   const items = await db.photos.toArray();
-  const materialized = await Promise.all(items.map((row) => materializeStoredPhotoBlob(row)));
-  return materialized.sort((a, b) => {
+  return items.sort((a, b) => {
     const ka = photoSortKey(a);
     const kb = photoSortKey(b);
     if (ka !== kb) return ka.localeCompare(kb);
@@ -114,7 +115,10 @@ export async function addPhotosFromFiles(
   const prepared = await Promise.all(
     files.map(async (file) => {
       const buf = await file.arrayBuffer();
-      const blob = new Blob([buf], { type: blobTypeForImageFile(file) });
+      let blob = new Blob([buf], { type: blobTypeForImageFile(file) });
+      if (!isFramed) {
+        blob = await resizeImageBlobForCache(blob);
+      }
       const takenAt = await readPhotoTakenAt(file);
       const framedFileName = isFramed
         ? file.name.replace(/\.[^.]+$/i, "") + ".jpg"

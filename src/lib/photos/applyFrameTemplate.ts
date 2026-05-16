@@ -1,8 +1,9 @@
-import { cropImageBlob, type NormalizedCropRect } from "@/lib/photos/cropImageBlob";
+import type { FrameViewportTemplate } from "@/lib/photos/frameTemplate";
+import { applyViewportTemplateToBlobs } from "@/lib/photos/frameTemplate";
 
 export async function applyFrameTemplateToBlobs(
   sources: Blob[],
-  rect: NormalizedCropRect,
+  template: FrameViewportTemplate,
 ): Promise<Blob[]> {
-  return Promise.all(sources.map((blob) => cropImageBlob(blob, rect)));
+  return applyViewportTemplateToBlobs(sources, template);
 }
