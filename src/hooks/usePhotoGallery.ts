@@ -8,8 +8,13 @@ import {
   listPhotos,
   updatePhotoBlob,
 } from "@/lib/db/fitnessDb";
-import { cropImageBlob, type NormalizedCropRect } from "@/lib/photos/cropImageBlob";
+import type { FrameViewportTemplate } from "@/lib/photos/frameTemplate";
+import { applyViewportTemplateToBlob } from "@/lib/photos/frameTemplate";
 import { applyFrameTemplateToBlobs } from "@/lib/photos/applyFrameTemplate";
+import {
+  exportFramedPhotos,
+  type ExportFramedPhotosResult,
+} from "@/lib/files/exportFramedPhotos";
 import { writeFramedPhotoToGymFolder } from "@/lib/files/writeFramedPhotoToGymFolder";
 
 export function usePhotoGallery() {
@@ -72,11 +77,11 @@ export function usePhotoGallery() {
   const saveFramedPhoto = useCallback(
     async (
       photo: PhotoRecord,
-      rect: NormalizedCropRect,
+      template: FrameViewportTemplate,
       folderConnected: boolean,
     ): Promise<string | null> => {
       if (photo.id == null) return "Photo not found in cache.";
-      const cropped = await cropImageBlob(photo.blob, rect);
+      const cropped = await applyViewportTemplateToBlob(photo.blob, template);
       const framedFileName = photo.fileName.replace(/\.[^.]+$/i, "") + ".jpg";
 
       await updatePhotoBlob(photo.id, cropped, {
@@ -92,7 +97,7 @@ export function usePhotoGallery() {
           }.`;
         }
       } else {
-        return "Saved in browser cache. Connect GymData on desktop to save framed copies to PhotosFramed.";
+        return "Saved in browser cache. Use Export framed photos to save to PhotosFramed on iPhone.";
       }
 
       await refresh();
@@ -103,13 +108,14 @@ export function usePhotoGallery() {
 
   const applyFrameToAll = useCallback(
     async (
-      templateRect: NormalizedCropRect,
+      template: FrameViewportTemplate,
       targets: PhotoRecord[],
       folderConnected: boolean,
     ): Promise<string | null> => {
+      if (targets.length === 0) return null;
       const blobs = await applyFrameTemplateToBlobs(
         targets.map((p) => p.blob),
-        templateRect,
+        template,
       );
       let warn: string | null = null;
       for (let i = 0; i < targets.length; i++) {
@@ -128,10 +134,13 @@ export function usePhotoGallery() {
         }
       }
       await refresh();
-      if (!folderConnected && !warn) {
-        warn = "Saved in browser cache. Connect GymData on desktop to save framed copies to PhotosFramed.";
+      const appliedMsg = `Applied frame to ${targets.length} photo${targets.length === 1 ? "" : "s"}.`;
+      if (!folderConnected) {
+        const mobileNote =
+          " Saved in browser cache. Use Export framed photos to save to PhotosFramed on iPhone.";
+        return warn ? `${appliedMsg} ${warn}` : `${appliedMsg}${mobileNote}`;
       }
-      return warn;
+      return warn ? `${appliedMsg} ${warn}` : appliedMsg;
     },
     [refresh],
   );
@@ -146,6 +155,14 @@ export function usePhotoGallery() {
     await refresh();
   }, [refresh]);
 
+  const exportFramedToFiles = useCallback(
+    async (folderConnected: boolean): Promise<ExportFramedPhotosResult> => {
+      const data = await listPhotos();
+      return exportFramedPhotos(data, folderConnected);
+    },
+    [],
+  );
+
   return {
     photos,
     loading,
@@ -159,5 +176,6 @@ export function usePhotoGallery() {
     pendingFrameQueue,
     clearPendingFrameQueue,
     clearAll,
+    exportFramedToFiles,
   };
 }

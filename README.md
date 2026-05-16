@@ -30,8 +30,11 @@ Paths match the project plan (iCloud or **On My iPhone** is fine—see [shortcut
 - **Manual sheet:** `…/GymData/fitness.csv` — weight, workout flag, optional calories
 - **HealthKit dump:** `…/GymData/health_stats.csv` — `date,calories_burned` (extra columns allowed for future stats)
 - **Photos:** `…/GymData/Photos/` as `IMG_YYYYMMDD.jpg`
+- **Framed photos:** `…/GymData/PhotosFramed/` — cropped JPEGs from the dashboard
 
 In the PWA, use **Import fitness.csv** and **Import health_stats.csv** separately (each merges into what is already in the browser), or **Replace all (1–2 CSVs)** for a full reload from disk. On desktop Chrome/Edge you can **Connect GymData folder** once so CSV/photo picks open inside that folder (`showOpenFilePicker` with `startIn`). iOS Safari cannot pre-select an iCloud folder; use the separate import buttons and pick each file from Files.
+
+After framing photos in the timeline, use **Export framed photos**. On iPhone this opens the Share sheet—choose **Save to Files** and put the JPEGs in `GymData/PhotosFramed`. On desktop with **Connect GymData folder**, export writes directly into that folder.
 
 **`fitness.csv` header (required):** `date,calories_burned,weight,workout_completed`  
 Example: `2025-10-01,,185.5,true` (empty calories is OK when you import with `health_stats.csv`, or calories stay “not logged” in the app). Leave **`workout_completed` empty** for a day if you did not log workout vs rest (`true` / `false` / `yes` / `no` / `1` / `0` still work).

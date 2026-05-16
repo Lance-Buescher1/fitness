@@ -15,7 +15,7 @@ import { useGymDataFolder } from "@/hooks/useGymDataFolder";
 import { usePhotoGallery } from "@/hooks/usePhotoGallery";
 import type { PhotoRecord } from "@/lib/db/types";
 import type { HeatmapMetric } from "@/lib/heatmap/types";
-import type { NormalizedCropRect } from "@/lib/photos/cropImageBlob";
+import type { FrameViewportTemplate } from "@/lib/photos/frameTemplate";
 import { photoSortKey } from "@/lib/photos/photoSortKey";
 
 export function Dashboard() {
@@ -43,6 +43,7 @@ export function Dashboard() {
     pendingFrameQueue,
     clearPendingFrameQueue,
     clearAll,
+    exportFramedToFiles,
   } = usePhotoGallery();
   const [metric, setMetric] = useState<HeatmapMetric>("calories");
   const [framingPhoto, setFramingPhoto] = useState<PhotoRecord | null>(null);
@@ -72,9 +73,9 @@ export function Dashboard() {
   );
 
   const handleSaveFrame = useCallback(
-    async (rect: NormalizedCropRect) => {
+    async (template: FrameViewportTemplate) => {
       if (!framingPhoto) return;
-      const warn = await saveFramedPhoto(framingPhoto, rect, gymFolder.folderConnected);
+      const warn = await saveFramedPhoto(framingPhoto, template, gymFolder.folderConnected);
       setPhotoFrameMsg(warn);
 
       if (applyAllAfterSave) {
@@ -86,8 +87,10 @@ export function Dashboard() {
         });
         const others = sorted.filter((p) => p.id !== framingPhoto.id && !p.isFramed);
         if (others.length > 0) {
-          const bulkWarn = await applyFrameToAll(rect, others, gymFolder.folderConnected);
-          if (bulkWarn) setPhotoFrameMsg(bulkWarn);
+          const bulkMsg = await applyFrameToAll(template, others, gymFolder.folderConnected);
+          setPhotoFrameMsg(bulkMsg ?? warn);
+        } else if (applyAllAfterSave) {
+          setPhotoFrameMsg(warn ?? "No other unframed photos to update.");
         }
       }
 
@@ -150,6 +153,29 @@ export function Dashboard() {
         onAddPhotos={(files) => addFromFiles(files)}
         onLoadFramedPhotos={(files) => loadFramedFromFiles(files)}
         onExportFitnessCsv={async () => mapExportResult(await exportFitnessCsvFile())}
+        onExportFramedPhotos={async () => {
+          const result = await exportFramedToFiles(gymFolder.folderConnected);
+          if (result.ok) {
+            if (result.method === "folder") {
+              return {
+                ok: true,
+                detail: `Wrote ${result.count} framed photo${result.count === 1 ? "" : "s"} to PhotosFramed.`,
+              };
+            }
+            if (result.method === "share") {
+              return {
+                ok: true,
+                detail: `Shared ${result.count} framed photo${result.count === 1 ? "" : "s"}. Save to GymData/PhotosFramed in Files.`,
+              };
+            }
+            return {
+              ok: true,
+              detail: `Downloaded ${result.count} framed photo${result.count === 1 ? "" : "s"}.`,
+            };
+          }
+          return { ok: false, detail: result.detail ?? "Export failed." };
+        }}
+        framedPhotoCount={photos.filter((p) => p.isFramed).length}
       />
 
       <HeatmapGrid rows={rows} metric={metric} onMetricChange={setMetric} />
@@ -176,8 +202,8 @@ export function Dashboard() {
             closeFrameEditor();
             clearPendingFrameQueue();
           }}
-          onSave={(rect) => {
-            void handleSaveFrame(rect);
+          onSave={(template) => {
+            void handleSaveFrame(template);
           }}
         />
       ) : null}
